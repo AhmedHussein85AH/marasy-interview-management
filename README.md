@@ -62,12 +62,34 @@ cd interview-management-pro
 npm install
 ```
 
-3. **تشغيل المشروع**
+3. **إعداد Supabase**
+- اتبع التعليمات في ملف `SUPABASE_SETUP.md`
+- أنشئ مشروع Supabase جديد
+- نفذ ملف `supabase_schema.sql` في SQL Editor
+
+4. **إعداد متغيرات البيئة**
+```bash
+cp env.example .env
+```
+
+ثم أضف قيم متغيرات البيئة في ملف `.env`:
+```env
+# كلمات مرور المستخدمين
+VITE_SECURITY_EMPLOYEE_PASSWORD=Sec@135$
+VITE_INTERVIEW_MANAGER_PASSWORD=Man@135$
+VITE_ADMIN_PASSWORD=Adm@135$
+
+# إعدادات Supabase
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+5. **تشغيل المشروع**
 ```bash
 npm run dev
 ```
 
-4. **فتح المتصفح**
+6. **فتح المتصفح**
 ```
 http://localhost:8080
 ```
@@ -138,10 +160,26 @@ VITE_SECURITY_EMPLOYEE_PASSWORD=your_security_employee_password_here
 - **Build Command**: `npm run build`
 - **Output Directory**: `dist`
 
+## 🗄️ قاعدة البيانات (Supabase)
+
+هذا المشروع يستخدم Supabase كقاعدة بيانات:
+
+- **قاعدة بيانات حقيقية**: جميع البيانات محفوظة بشكل دائم
+- **متزامنة**: البيانات متاحة لجميع المستخدمين
+- **آمنة**: حماية على مستوى الصفوف (RLS)
+- **مجانية**: حتى 500MB من قاعدة البيانات
+
+### الميزات:
+- ✅ حفظ دائم للبيانات
+- ✅ مشاركة البيانات بين المستخدمين
+- ✅ إشعارات فورية
+- ✅ نسخ احتياطية تلقائية
+- ✅ واجهة إدارة سهلة
+
 ## 🔧 التطوير المستقبلي
 
 ### ميزات مخططة
-- [ ] ربط قاعدة بيانات حقيقية
+- [x] ربط قاعدة بيانات حقيقية (Supabase)
 - [ ] نظام إشعارات بالبريد الإلكتروني
 - [ ] تقارير PDF قابلة للتصدير
 - [ ] تطبيق موبايل

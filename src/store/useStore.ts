@@ -1,4 +1,8 @@
 import { create } from 'zustand'
+import { supabase } from '../integrations/supabase/client'
+import { Database } from '../integrations/supabase/types'
+
+type Tables = Database['public']['Tables']
 
 // أنواع المستخدمين
 export type UserType = 'security_employee' | 'interview_manager' | 'admin'
@@ -206,108 +210,181 @@ export const useStore = create<AppState>()(
       },
 
       // إضافة مرشح
-      addCandidate: (candidateData) => {
+      addCandidate: async (candidateData) => {
         const { currentUser, savedCandidates, candidates } = get()
         if (!currentUser) return
 
-        // فحص إذا كان المرشح مرفوض من قبل
-        const rejectedBefore = savedCandidates.find(
-          saved => saved.nationalId === candidateData.nationalId && saved.finalResult === 'مرفوض'
-        )
+        try {
+          // فحص إذا كان المرشح مرفوض من قبل
+          const rejectedBefore = savedCandidates.find(
+            saved => saved.nationalId === candidateData.nationalId && saved.finalResult === 'مرفوض'
+          )
 
-        const newCandidate: Candidate = {
-          ...candidateData,
-          id: Date.now().toString(),
-          status: 'جديد',
-          createdBy: currentUser.name,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isRejectedBefore: !!rejectedBefore,
-          previousRejectionDate: rejectedBefore?.decisionDate
-        }
-
-        console.log('إضافة مرشح جديد:', newCandidate.name)
-        console.log('Length before:', candidates.length)
-
-        // إضافة إشعار إذا كان مرفوض من قبل
-        if (rejectedBefore) {
-          const notification: Notification = {
-            id: Date.now().toString() + '_notification',
-            type: 'rejected_before',
-            title: 'مرشح مرفوض من قبل',
-            message: `تم تسجيل مرشح جديد (${candidateData.name}) تم رفضه من قبل في ${rejectedBefore.decisionDate}`,
-            candidateId: newCandidate.id,
-            candidateName: candidateData.name,
-            isRead: false,
-            createdAt: new Date().toISOString()
+          const newCandidate = {
+            ...candidateData,
+            status: 'جديد' as const,
+            created_by: currentUser.name,
+            is_rejected_before: !!rejectedBefore,
+            previous_rejection_date: rejectedBefore?.decisionDate || null
           }
-          
-          set(state => ({
-            candidates: [...state.candidates, newCandidate],
-            notifications: [...state.notifications, notification],
-            stats: {
-              ...state.stats,
-              totalCandidates: state.candidates.length + 1
-            }
-          }))
-        } else {
-          set(state => ({
-            candidates: [...state.candidates, newCandidate],
-            stats: {
-              ...state.stats,
-              totalCandidates: state.candidates.length + 1
-            }
-          }))
-        }
 
-        console.log('تم إضافة المرشح بنجاح')
-        console.log('Length after:', get().candidates.length)
+          console.log('إضافة مرشح جديد:', newCandidate.name)
+
+          // إضافة المرشح إلى Supabase
+          const { data, error } = await supabase
+            .from('candidates')
+            .insert([newCandidate])
+            .select()
+            .single()
+
+          if (error) {
+            console.error('خطأ في إضافة المرشح:', error)
+            throw error
+          }
+
+          // إضافة الإشعار إذا كان مرفوض من قبل
+          if (rejectedBefore) {
+            const notification = {
+              type: 'rejected_before' as const,
+              title: 'مرشح مرفوض من قبل',
+              message: `تم تسجيل مرشح جديد (${candidateData.name}) تم رفضه من قبل في ${rejectedBefore.decisionDate}`,
+              candidate_id: data.id,
+              candidate_name: candidateData.name,
+              is_read: false
+            }
+
+            await supabase
+              .from('notifications')
+              .insert([notification])
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            candidates: [...state.candidates, data],
+            stats: {
+              ...state.stats,
+              totalCandidates: state.stats.totalCandidates + 1
+            }
+          }))
+
+          console.log('تم إضافة المرشح بنجاح إلى قاعدة البيانات')
+        } catch (error) {
+          console.error('خطأ في إضافة المرشح:', error)
+          throw error
+        }
       },
 
       // تحديث حالة المرشح
-      updateCandidateStatus: (id, status, offerResult) => {
+      updateCandidateStatus: async (id, status, offerResult) => {
         const { currentUser } = get()
         if (!currentUser || currentUser.userType === 'security_employee') return
 
-        set(state => ({
-          candidates: state.candidates.map(candidate =>
-            candidate.id === id
-              ? { ...candidate, status, offerResult, updatedAt: new Date().toISOString() }
-              : candidate
-          )
-        }))
+        try {
+          // تحديث في Supabase
+          const { error } = await supabase
+            .from('candidates')
+            .update({
+              status,
+              offer_result: offerResult,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+
+          if (error) {
+            console.error('خطأ في تحديث حالة المرشح:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            candidates: state.candidates.map(candidate =>
+              candidate.id === id
+                ? { ...candidate, status, offerResult, updatedAt: new Date().toISOString() }
+                : candidate
+            )
+          }))
+
+          // حفظ في قاعدة البيانات إذا كان القرار نهائي
+          if (offerResult && ['مقبول', 'مرفوض', 'مستبعد'].includes(offerResult)) {
+            const candidate = get().candidates.find(c => c.id === id)
+            if (candidate) {
+              await get().saveCandidateToDatabase({
+                ...candidate,
+                finalResult: offerResult as 'مقبول' | 'مرفوض' | 'مستبعد',
+                decisionDate: new Date().toISOString(),
+                decisionBy: currentUser.name,
+                notes: ''
+              })
+            }
+          }
+        } catch (error) {
+          console.error('خطأ في تحديث حالة المرشح:', error)
+          throw error
+        }
       },
 
       // حذف مرشح
-      deleteCandidate: (id) => {
+      deleteCandidate: async (id) => {
         const { currentUser } = get()
         if (!currentUser || currentUser.userType !== 'admin') return
 
-        set(state => ({
-          candidates: state.candidates.filter(candidate => candidate.id !== id),
-          stats: {
-            ...state.stats,
-            totalCandidates: Math.max(0, state.stats.totalCandidates - 1)
+        try {
+          // حذف من Supabase
+          const { error } = await supabase
+            .from('candidates')
+            .delete()
+            .eq('id', id)
+
+          if (error) {
+            console.error('خطأ في حذف المرشح:', error)
+            throw error
           }
-        }))
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            candidates: state.candidates.filter(candidate => candidate.id !== id),
+            stats: {
+              ...state.stats,
+              totalCandidates: Math.max(0, state.stats.totalCandidates - 1)
+            }
+          }))
+        } catch (error) {
+          console.error('خطأ في حذف المرشح:', error)
+          throw error
+        }
       },
 
       // إضافة مقابلة
-      addInterview: (interviewData) => {
+      addInterview: async (interviewData) => {
         const { currentUser } = get()
         if (!currentUser) return
 
-        const newInterview: Interview = {
-          ...interviewData,
-          id: Date.now().toString(),
-          interviewer: currentUser.name,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
+        try {
+          const newInterview = {
+            ...interviewData,
+            interviewer: currentUser.name
+          }
 
-        set(state => ({
-          interviews: [...state.interviews, newInterview]
-        }))
+          // إضافة إلى Supabase
+          const { data, error } = await supabase
+            .from('interviews')
+            .insert([newInterview])
+            .select()
+            .single()
+
+          if (error) {
+            console.error('خطأ في إضافة المقابلة:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            interviews: [...state.interviews, data]
+          }))
+        } catch (error) {
+          console.error('خطأ في إضافة المقابلة:', error)
+          throw error
+        }
       },
 
       // تحديث مقابلة
@@ -350,32 +427,48 @@ export const useStore = create<AppState>()(
       },
 
       // حفظ مرشح في قاعدة البيانات
-      saveCandidateToDatabase: (candidate, finalResult, notes) => {
-        const { currentUser, savedCandidates } = get()
+      saveCandidateToDatabase: async (candidateData) => {
+        const { currentUser } = get()
         if (!currentUser) return
 
-        const savedCandidate: SavedCandidate = {
-          id: Date.now().toString(),
-          name: candidate.name,
-          nationalId: candidate.nationalId,
-          birthDate: candidate.birthDate,
-          governorate: candidate.governorate,
-          qualification: candidate.qualification,
-          maritalStatus: candidate.maritalStatus,
-          securityCompany: candidate.securityCompany,
-          offerDate: candidate.offerDate,
-          finalResult,
-          decisionDate: new Date().toISOString(),
-          decisionBy: currentUser.name,
-          notes,
-          isRejectedBefore: candidate.isRejectedBefore || false,
-          previousRejectionDate: candidate.previousRejectionDate,
-          createdAt: new Date().toISOString()
-        }
+        try {
+          const savedCandidate = {
+            name: candidateData.name,
+            national_id: candidateData.nationalId,
+            birth_date: candidateData.birthDate,
+            governorate: candidateData.governorate,
+            qualification: candidateData.qualification,
+            marital_status: candidateData.maritalStatus,
+            security_company: candidateData.securityCompany,
+            offer_date: candidateData.offerDate,
+            final_result: candidateData.finalResult,
+            decision_date: candidateData.decisionDate,
+            decision_by: candidateData.decisionBy,
+            notes: candidateData.notes || null,
+            is_rejected_before: candidateData.isRejectedBefore || false,
+            previous_rejection_date: candidateData.previousRejectionDate || null
+          }
 
-        set(state => ({
-          savedCandidates: [...state.savedCandidates, savedCandidate]
-        }))
+          // إضافة إلى Supabase
+          const { data, error } = await supabase
+            .from('saved_candidates')
+            .insert([savedCandidate])
+            .select()
+            .single()
+
+          if (error) {
+            console.error('خطأ في حفظ المرشح:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            savedCandidates: [...state.savedCandidates, data]
+          }))
+        } catch (error) {
+          console.error('خطأ في حفظ المرشح:', error)
+          throw error
+        }
       },
 
       // البحث في قاعدة البيانات المحفوظة
@@ -436,11 +529,78 @@ export const useStore = create<AppState>()(
         }
       },
 
+      // تحميل البيانات من Supabase
+      loadDataFromSupabase: async () => {
+        try {
+          console.log('تحميل البيانات من Supabase...')
+
+          // تحميل المرشحين
+          const { data: candidates, error: candidatesError } = await supabase
+            .from('candidates')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          if (candidatesError) {
+            console.error('خطأ في تحميل المرشحين:', candidatesError)
+          }
+
+          // تحميل المقابلات
+          const { data: interviews, error: interviewsError } = await supabase
+            .from('interviews')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          if (interviewsError) {
+            console.error('خطأ في تحميل المقابلات:', interviewsError)
+          }
+
+          // تحميل المرشحين المحفوظين
+          const { data: savedCandidates, error: savedError } = await supabase
+            .from('saved_candidates')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          if (savedError) {
+            console.error('خطأ في تحميل المرشحين المحفوظين:', savedError)
+          }
+
+          // تحميل الإشعارات
+          const { data: notifications, error: notificationsError } = await supabase
+            .from('notifications')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          if (notificationsError) {
+            console.error('خطأ في تحميل الإشعارات:', notificationsError)
+          }
+
+          // حساب الإحصائيات
+          const stats: DashboardStats = {
+            totalCandidates: candidates?.length || 0,
+            pendingInterviews: interviews?.filter(i => i.status === 'مجدولة').length || 0,
+            completedInterviews: interviews?.filter(i => i.status === 'مكتملة').length || 0,
+            hiredCandidates: candidates?.filter(c => c.offer_result === 'مقبول').length || 0,
+            rejectedCandidates: candidates?.filter(c => c.offer_result === 'مرفوض').length || 0
+          }
+
+          set({
+            candidates: candidates || [],
+            interviews: interviews || [],
+            savedCandidates: savedCandidates || [],
+            notifications: notifications || [],
+            stats,
+            isInitialized: true
+          })
+
+          console.log('تم تحميل البيانات من Supabase بنجاح')
+        } catch (error) {
+          console.error('خطأ في تحميل البيانات:', error)
+        }
+      },
+
       // تهيئة البيانات التجريبية
-      initializeDemoData: () => {
+      initializeDemoData: async () => {
         console.log('بدء تهيئة البيانات التجريبية...')
-        
-        const currentState = get()
         
         // إنشاء المستخدمين التجريبيين دائماً
         const demoUsers: User[] = [
@@ -472,83 +632,17 @@ export const useStore = create<AppState>()(
 
         console.log('إنشاء المستخدمين التجريبيين:', demoUsers.map(u => u.email))
 
-        // إنشاء المرشحين التجريبيين - فقط إذا لم تكن موجودة
-        const demoCandidates: Candidate[] = currentState.candidates.length > 0 ? currentState.candidates : [
-          {
-            id: '1',
-            name: 'خالد عبدالله',
-            nationalId: '12345678901234',
-            birthDate: '1990-05-15',
-            governorate: 'القاهرة',
-            qualification: 'دبلوم تجارة',
-            maritalStatus: 'متزوج',
-            securityCompany: 'شركة الأمن المتقدم',
-            offerDate: '2024-01-10',
-            offerResult: 'في انتظار',
-            status: 'جديد',
-            createdBy: 'مدير الأمن - مسئول مقابلات',
-            createdAt: '2024-01-08T10:00:00Z',
-            updatedAt: '2024-01-08T10:00:00Z'
-          },
-          {
-            id: '2',
-            name: 'فاطمة حسن',
-            nationalId: '23456789012345',
-            birthDate: '1988-12-20',
-            governorate: 'الجيزة',
-            qualification: 'بكالوريوس إدارة أعمال',
-            maritalStatus: 'أعزب',
-            securityCompany: 'شركة الأمن المتقدم',
-            offerDate: '2024-01-12',
-            offerResult: 'في انتظار',
-            status: 'جديد',
-            createdBy: 'مدير الأمن - مسئول مقابلات',
-            createdAt: '2024-01-09T14:30:00Z',
-            updatedAt: '2024-01-09T14:30:00Z'
-          }
-        ]
-
-        // إنشاء المقابلات التجريبية - فقط إذا لم تكن موجودة
-        const demoInterviews: Interview[] = currentState.interviews.length > 0 ? currentState.interviews : [
-          {
-            id: '1',
-            candidateId: '1',
-            candidateName: 'خالد عبدالله',
-            position: 'أمن',
-            date: '2024-01-15',
-            time: '10:00',
-            status: 'مجدولة',
-            notes: 'مقابلة أولية',
-            interviewer: 'سارة أحمد - مسئول مقابلات',
-            createdAt: '2024-01-10T09:00:00Z',
-            updatedAt: '2024-01-10T09:00:00Z'
-          }
-        ]
-
-        // حساب الإحصائيات
-        const stats: DashboardStats = {
-          totalCandidates: demoCandidates.length,
-          pendingInterviews: demoInterviews.filter(i => i.status === 'مجدولة').length,
-          completedInterviews: demoInterviews.filter(i => i.status === 'مكتملة').length,
-          hiredCandidates: demoCandidates.filter(c => c.offerResult === 'مقبول').length,
-          rejectedCandidates: demoCandidates.filter(c => c.offerResult === 'مرفوض').length
-        }
-
-        // تحديث البيانات مع الحفاظ على البيانات الموجودة
+        // تحديث المستخدمين
         set({
           users: demoUsers,
-          candidates: demoCandidates,
-          interviews: demoInterviews,
-          stats,
-          isInitialized: true,
-          // الحفاظ على البيانات الموجودة
-          savedCandidates: currentState.savedCandidates || [],
-          notifications: currentState.notifications || []
+          isInitialized: true
         })
+
+        // تحميل البيانات من Supabase
+        await get().loadDataFromSupabase()
 
         console.log('تم تهيئة البيانات التجريبية بنجاح')
         console.log('المستخدمون المتاحون:', demoUsers.map(u => u.email))
-        console.log('المرشحون المتاحون:', demoCandidates.length)
       },
 
       // إعادة تعيين البيانات
