@@ -1,0 +1,458 @@
+import React, { useState, useEffect } from 'react'
+import { useStore } from '../store/useStore'
+import ProtectedLayout from '../components/ProtectedLayout'
+
+const CandidatesPage: React.FC = () => {
+  const { 
+    currentUser, 
+    candidates, 
+    addCandidate, 
+    updateCandidateStatus, 
+    deleteCandidate,
+    searchCandidates,
+    saveCandidateToDatabase
+  } = useStore()
+  
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filteredCandidates, setFilteredCandidates] = useState(candidates)
+  const [newCandidate, setNewCandidate] = useState({
+    name: '',
+    nationalId: '',
+    birthDate: '',
+    governorate: '',
+    qualification: '',
+    maritalStatus: 'أعزب' as const,
+    securityCompany: '',
+    offerDate: '',
+    offerResult: 'في انتظار' as const
+  })
+
+  useEffect(() => {
+    if (searchQuery) {
+      setFilteredCandidates(searchCandidates(searchQuery))
+    } else {
+      setFilteredCandidates(candidates)
+    }
+  }, [searchQuery, candidates])
+
+  const handleAddCandidate = () => {
+    if (!newCandidate.name || !newCandidate.nationalId || !newCandidate.birthDate || 
+        !newCandidate.governorate || !newCandidate.qualification) {
+      alert('يرجى ملء جميع الحقول المطلوبة')
+      return
+    }
+
+    addCandidate(newCandidate)
+    setNewCandidate({
+      name: '',
+      nationalId: '',
+      birthDate: '',
+      governorate: '',
+      qualification: '',
+      maritalStatus: 'أعزب',
+      securityCompany: '',
+      offerDate: '',
+      offerResult: 'في انتظار'
+    })
+    setShowAddForm(false)
+    alert('تم إضافة المرشح بنجاح')
+  }
+
+  const handleStatusUpdate = (id: string, status: string, result: string) => {
+    const candidate = candidates.find(c => c.id === id)
+    if (candidate) {
+      updateCandidateStatus(id, status as any, result as any)
+      
+      // حفظ في قاعدة البيانات إذا كان القرار نهائي
+      if (result === 'مقبول' || result === 'مرفوض' || result === 'مستبعد') {
+        saveCandidateToDatabase(candidate, result as any)
+      }
+      
+      alert('تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح')
+    }
+  }
+
+  const handleDeleteCandidate = (id: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا المرشح؟')) {
+      deleteCandidate(id)
+      alert('تم حذف المرشح بنجاح')
+    }
+  }
+
+  const canAddCandidate = currentUser?.userType === 'security_employee' || currentUser?.userType === 'admin'
+  const canUpdateStatus = currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
+  const canDelete = currentUser?.userType === 'admin'
+
+  return (
+    <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
+      <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{ color: '#2c3e50', margin: 0 }}>
+            المرشحين ({filteredCandidates.length})
+          </h2>
+          
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="البحث في المرشحين..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                width: '250px'
+              }}
+            />
+            
+            {canAddCandidate && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                style={{
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  padding: '10px 15px',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer'
+                }}
+              >
+                إضافة مرشح جديد
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* نموذج إضافة مرشح */}
+        {showAddForm && (
+          <div style={{
+            backgroundColor: '#f8f9fa',
+            padding: '20px',
+            borderRadius: '10px',
+            marginBottom: '20px',
+            border: '2px solid #3498db'
+          }}>
+            <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>
+              إضافة مرشح جديد
+            </h3>
+            
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '15px',
+              marginBottom: '15px'
+            }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  الاسم الكامل *
+                </label>
+                <input
+                  type="text"
+                  value={newCandidate.name}
+                  onChange={(e) => setNewCandidate({...newCandidate, name: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                  placeholder="أدخل الاسم الكامل"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  الرقم القومي *
+                </label>
+                <input
+                  type="text"
+                  value={newCandidate.nationalId}
+                  onChange={(e) => setNewCandidate({...newCandidate, nationalId: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                  placeholder="أدخل الرقم القومي"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  تاريخ الميلاد *
+                </label>
+                <input
+                  type="date"
+                  value={newCandidate.birthDate}
+                  onChange={(e) => setNewCandidate({...newCandidate, birthDate: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  المحافظة *
+                </label>
+                <input
+                  type="text"
+                  value={newCandidate.governorate}
+                  onChange={(e) => setNewCandidate({...newCandidate, governorate: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                  placeholder="أدخل المحافظة"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  المؤهل *
+                </label>
+                <input
+                  type="text"
+                  value={newCandidate.qualification}
+                  onChange={(e) => setNewCandidate({...newCandidate, qualification: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                  placeholder="أدخل المؤهل"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  الحالة الاجتماعية
+                </label>
+                <select
+                  value={newCandidate.maritalStatus}
+                  onChange={(e) => setNewCandidate({...newCandidate, maritalStatus: e.target.value as any})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                >
+                  <option value="أعزب">أعزب</option>
+                  <option value="متزوج">متزوج</option>
+                  <option value="مطلق">مطلق</option>
+                  <option value="أرمل">أرمل</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  شركة الأمن
+                </label>
+                <input
+                  type="text"
+                  value={newCandidate.securityCompany}
+                  onChange={(e) => setNewCandidate({...newCandidate, securityCompany: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                  placeholder="أدخل اسم شركة الأمن"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  تاريخ العرض
+                </label>
+                <input
+                  type="date"
+                  value={newCandidate.offerDate}
+                  onChange={(e) => setNewCandidate({...newCandidate, offerDate: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleAddCandidate}
+                style={{
+                  backgroundColor: '#2ecc71',
+                  color: 'white',
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer'
+                }}
+              >
+                إضافة المرشح
+              </button>
+              <button
+                onClick={() => setShowAddForm(false)}
+                style={{
+                  backgroundColor: '#95a5a6',
+                  color: 'white',
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer'
+                }}
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* جدول المرشحين */}
+        <div style={{ backgroundColor: 'white', borderRadius: '10px', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl' }}>
+            <thead style={{ backgroundColor: '#f8f9fa' }}>
+              <tr>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الاسم
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الرقم القومي
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  تاريخ الميلاد
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  المحافظة
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  المؤهل
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الحالة الاجتماعية
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  نتيجة العرض
+                </th>
+                {canUpdateStatus && (
+                  <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                    الإجراءات
+                  </th>
+                )}
+                {canDelete && (
+                  <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                    حذف
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCandidates.map(candidate => (
+                <tr key={candidate.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                  <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#2c3e50' }}>
+                    {candidate.name}
+                    {candidate.isRejectedBefore && (
+                      <span style={{
+                        color: '#e74c3c',
+                        marginLeft: '5px',
+                        fontSize: '16px'
+                      }} title={`مرفوض من قبل في ${candidate.previousRejectionDate}`}>
+                        ⚠️
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.nationalId}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.birthDate}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.governorate}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.qualification}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.maritalStatus}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    <span style={{
+                      backgroundColor: candidate.offerResult === 'مقبول' ? '#2ecc71' : 
+                                     candidate.offerResult === 'مرفوض' ? '#e74c3c' : 
+                                     candidate.offerResult === 'مستبعد' ? '#f39c12' : '#3498db',
+                      color: 'white',
+                      padding: '5px 10px',
+                      borderRadius: '15px',
+                      fontSize: '12px'
+                    }}>
+                      {candidate.offerResult}
+                    </span>
+                  </td>
+                  {canUpdateStatus && (
+                    <td style={{ padding: '15px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => handleStatusUpdate(candidate.id, 'تم التوظيف', 'مقبول')}
+                          style={{
+                            backgroundColor: '#2ecc71',
+                            color: 'white',
+                            border: 'none',
+                            padding: '5px 10px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          قبول
+                        </button>
+                        <button
+                          onClick={() => handleStatusUpdate(candidate.id, 'مرفوض', 'مرفوض')}
+                          style={{
+                            backgroundColor: '#e74c3c',
+                            color: 'white',
+                            border: 'none',
+                            padding: '5px 10px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          رفض
+                        </button>
+                        <button
+                          onClick={() => handleStatusUpdate(candidate.id, 'مرفوض', 'مستبعد')}
+                          style={{
+                            backgroundColor: '#f39c12',
+                            color: 'white',
+                            border: 'none',
+                            padding: '5px 10px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          استبعاد
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                  {canDelete && (
+                    <td style={{ padding: '15px', textAlign: 'center' }}>
+                      <button
+                        onClick={() => handleDeleteCandidate(candidate.id)}
+                        style={{
+                          color: '#e74c3c',
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          padding: '5px 10px'
+                        }}
+                      >
+                        حذف
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredCandidates.length === 0 && (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px',
+            color: '#7f8c8d'
+          }}>
+            <p>لا توجد مرشحين متطابقين مع البحث</p>
+          </div>
+        )}
+      </div>
+    </ProtectedLayout>
+  )
+}
+
+export default CandidatesPage
