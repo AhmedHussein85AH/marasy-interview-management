@@ -209,7 +209,7 @@ export const useStore = create<AppState>()(
 
       // إضافة مرشح
       addCandidate: (candidateData) => {
-        const { currentUser, savedCandidates } = get()
+        const { currentUser, savedCandidates, candidates } = get()
         if (!currentUser) return
 
         // فحص إذا كان المرشح مرفوض من قبل
@@ -227,6 +227,9 @@ export const useStore = create<AppState>()(
           isRejectedBefore: !!rejectedBefore,
           previousRejectionDate: rejectedBefore?.decisionDate
         }
+
+        console.log('إضافة مرشح جديد:', newCandidate.name)
+        console.log('Length before:', candidates.length)
 
         // إضافة إشعار إذا كان مرفوض من قبل
         if (rejectedBefore) {
@@ -246,7 +249,7 @@ export const useStore = create<AppState>()(
             notifications: [...state.notifications, notification],
             stats: {
               ...state.stats,
-              totalCandidates: state.stats.totalCandidates + 1
+              totalCandidates: state.candidates.length + 1
             }
           }))
         } else {
@@ -254,10 +257,13 @@ export const useStore = create<AppState>()(
             candidates: [...state.candidates, newCandidate],
             stats: {
               ...state.stats,
-              totalCandidates: state.stats.totalCandidates + 1
+              totalCandidates: state.candidates.length + 1
             }
           }))
         }
+
+        console.log('تم إضافة المرشح بنجاح')
+        console.log('Length after:', get().candidates.length)
       },
 
       // تحديث حالة المرشح
@@ -436,6 +442,8 @@ export const useStore = create<AppState>()(
       initializeDemoData: () => {
         console.log('بدء تهيئة البيانات التجريبية...')
         
+        const currentState = get()
+        
         // إنشاء المستخدمين التجريبيين دائماً
         const demoUsers: User[] = [
           {
@@ -466,8 +474,8 @@ export const useStore = create<AppState>()(
 
         console.log('إنشاء المستخدمين التجريبيين:', demoUsers.map(u => u.email))
 
-        // إنشاء المرشحين التجريبيين
-        const demoCandidates: Candidate[] = [
+        // إنشاء المرشحين التجريبيين - فقط إذا لم تكن موجودة
+        const demoCandidates: Candidate[] = currentState.candidates.length > 0 ? currentState.candidates : [
           {
             id: '1',
             name: 'خالد عبدالله',
@@ -502,8 +510,8 @@ export const useStore = create<AppState>()(
           }
         ]
 
-        // إنشاء المقابلات التجريبية
-        const demoInterviews: Interview[] = [
+        // إنشاء المقابلات التجريبية - فقط إذا لم تكن موجودة
+        const demoInterviews: Interview[] = currentState.interviews.length > 0 ? currentState.interviews : [
           {
             id: '1',
             candidateId: '1',
@@ -528,16 +536,21 @@ export const useStore = create<AppState>()(
           rejectedCandidates: demoCandidates.filter(c => c.offerResult === 'مرفوض').length
         }
 
+        // تحديث البيانات مع الحفاظ على البيانات الموجودة
         set({
           users: demoUsers,
           candidates: demoCandidates,
           interviews: demoInterviews,
           stats,
-          isInitialized: true
+          isInitialized: true,
+          // الحفاظ على البيانات الموجودة
+          savedCandidates: currentState.savedCandidates || [],
+          notifications: currentState.notifications || []
         })
 
         console.log('تم تهيئة البيانات التجريبية بنجاح')
         console.log('المستخدمون المتاحون:', demoUsers.map(u => u.email))
+        console.log('المرشحون المتاحون:', demoCandidates.length)
       },
 
       // إعادة تعيين البيانات
@@ -573,7 +586,10 @@ export const useStore = create<AppState>()(
         isInitialized: state.isInitialized
       }),
       onRehydrateStorage: () => (state) => {
-        console.log('تم استعادة البيانات من التخزين المحلي:', state)
+        console.log('تم استعادة البيانات من التخزين المحلي')
+        console.log('عدد المرشحين:', state?.candidates?.length || 0)
+        console.log('عدد المقابلات:', state?.interviews?.length || 0)
+        console.log('عدد المستخدمين:', state?.users?.length || 0)
       }
     }
   )
