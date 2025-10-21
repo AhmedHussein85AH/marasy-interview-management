@@ -168,7 +168,7 @@ VITE_SECURITY_EMPLOYEE_PASSWORD=your_security_employee_password_here
 ## 📞 التواصل
 
 - **المطور**: Ahmed Hussein - Security Coordinator
-- **البريد الإلكتروني**: AhmedHusseinElsayed@outlook.com
+- **البريد الإلكتروني**: ahmed@example.com
 - **GitHub**: [@ahmedhussein85ah](https://github.com/ahmedhussein85ah)
 
 ## 🙏 شكر وتقدير

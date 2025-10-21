@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
 // أنواع المستخدمين
 export type UserType = 'security_employee' | 'interview_manager' | 'admin'
@@ -137,10 +136,9 @@ export interface AppState {
   resetData: () => void
 }
 
-// إنشاء المتجر
+// إنشاء المتجر - بدون تخزين محلي
 export const useStore = create<AppState>()(
-  persist(
-    (set, get) => ({
+  (set, get) => ({
       // البيانات الأولية
       users: [],
       currentUser: null,
@@ -555,6 +553,8 @@ export const useStore = create<AppState>()(
 
       // إعادة تعيين البيانات
       resetData: () => {
+        console.log('🔄 [STORE] إعادة تعيين البيانات...')
+        
         set({
           users: [],
           currentUser: null,
@@ -571,26 +571,8 @@ export const useStore = create<AppState>()(
           },
           isInitialized: false
         })
+        
+        console.log('✅ [STORE] تم مسح جميع البيانات وإعادة التعيين')
       }
-    }),
-    {
-      name: 'interview-management-storage',
-      partialize: (state) => ({
-        users: state.users,
-        currentUser: state.currentUser,
-        candidates: state.candidates,
-        savedCandidates: state.savedCandidates,
-        notifications: state.notifications,
-        interviews: state.interviews,
-        stats: state.stats,
-        isInitialized: state.isInitialized
-      }),
-      onRehydrateStorage: () => (state) => {
-        console.log('تم استعادة البيانات من التخزين المحلي')
-        console.log('عدد المرشحين:', state?.candidates?.length || 0)
-        console.log('عدد المقابلات:', state?.interviews?.length || 0)
-        console.log('عدد المستخدمين:', state?.users?.length || 0)
-      }
-    }
-  )
+    })
 )
