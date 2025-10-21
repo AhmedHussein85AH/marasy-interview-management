@@ -124,7 +124,7 @@ export interface AppState {
   addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void
   updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult']) => void
   deleteCandidate: (id: string) => void
-  saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد', notes?: string) => void
+  saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد', notes?: string) => Promise<void>
   addInterview: (interview: Omit<Interview, 'id' | 'createdAt' | 'updatedAt'>) => void
   updateInterview: (id: string, updates: Partial<Interview>) => void
   deleteInterview: (id: string) => void
@@ -221,7 +221,15 @@ export const useStore = create<AppState>()(
           )
 
           const newCandidate = {
-            ...candidateData,
+            name: candidateData.name,
+            national_id: candidateData.nationalId,
+            birth_date: candidateData.birthDate,
+            governorate: candidateData.governorate,
+            qualification: candidateData.qualification,
+            marital_status: candidateData.maritalStatus,
+            security_company: candidateData.securityCompany,
+            offer_date: candidateData.offerDate,
+            offer_result: candidateData.offerResult || 'في انتظار',
             status: 'جديد' as const,
             created_by: currentUser.name,
             is_rejected_before: !!rejectedBefore,
@@ -239,6 +247,8 @@ export const useStore = create<AppState>()(
 
           if (error) {
             console.error('خطأ في إضافة المرشح:', error)
+            console.error('تفاصيل الخطأ:', error.message)
+            console.error('كود الخطأ:', error.code)
             throw error
           }
 
@@ -308,13 +318,7 @@ export const useStore = create<AppState>()(
           if (offerResult && ['مقبول', 'مرفوض', 'مستبعد'].includes(offerResult)) {
             const candidate = get().candidates.find(c => c.id === id)
             if (candidate) {
-              await get().saveCandidateToDatabase({
-                ...candidate,
-                finalResult: offerResult as 'مقبول' | 'مرفوض' | 'مستبعد',
-                decisionDate: new Date().toISOString(),
-                decisionBy: currentUser.name,
-                notes: ''
-              })
+              await get().saveCandidateToDatabase(candidate, offerResult as 'مقبول' | 'مرفوض' | 'مستبعد')
             }
           }
         } catch (error) {
@@ -361,7 +365,13 @@ export const useStore = create<AppState>()(
 
         try {
           const newInterview = {
-            ...interviewData,
+            candidate_id: interviewData.candidateId,
+            candidate_name: interviewData.candidateName,
+            position: interviewData.position,
+            date: interviewData.date,
+            time: interviewData.time,
+            status: interviewData.status || 'مجدولة',
+            notes: interviewData.notes || null,
             interviewer: currentUser.name
           }
 
@@ -427,26 +437,26 @@ export const useStore = create<AppState>()(
       },
 
       // حفظ مرشح في قاعدة البيانات
-      saveCandidateToDatabase: async (candidateData) => {
+      saveCandidateToDatabase: async (candidate, finalResult, notes) => {
         const { currentUser } = get()
         if (!currentUser) return
 
         try {
           const savedCandidate = {
-            name: candidateData.name,
-            national_id: candidateData.nationalId,
-            birth_date: candidateData.birthDate,
-            governorate: candidateData.governorate,
-            qualification: candidateData.qualification,
-            marital_status: candidateData.maritalStatus,
-            security_company: candidateData.securityCompany,
-            offer_date: candidateData.offerDate,
-            final_result: candidateData.finalResult,
-            decision_date: candidateData.decisionDate,
-            decision_by: candidateData.decisionBy,
-            notes: candidateData.notes || null,
-            is_rejected_before: candidateData.isRejectedBefore || false,
-            previous_rejection_date: candidateData.previousRejectionDate || null
+            name: candidate.name,
+            national_id: candidate.nationalId,
+            birth_date: candidate.birthDate,
+            governorate: candidate.governorate,
+            qualification: candidate.qualification,
+            marital_status: candidate.maritalStatus,
+            security_company: candidate.securityCompany,
+            offer_date: candidate.offerDate,
+            final_result: finalResult,
+            decision_date: new Date().toISOString(),
+            decision_by: currentUser.name,
+            notes: notes || null,
+            is_rejected_before: candidate.isRejectedBefore || false,
+            previous_rejection_date: candidate.previousRejectionDate || null
           }
 
           // إضافة إلى Supabase
@@ -533,6 +543,8 @@ export const useStore = create<AppState>()(
       loadDataFromSupabase: async () => {
         try {
           console.log('تحميل البيانات من Supabase...')
+          console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL)
+          console.log('Supabase Key:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing')
 
           // تحميل المرشحين
           const { data: candidates, error: candidatesError } = await supabase
@@ -542,6 +554,7 @@ export const useStore = create<AppState>()(
 
           if (candidatesError) {
             console.error('خطأ في تحميل المرشحين:', candidatesError)
+            console.error('تفاصيل الخطأ:', candidatesError.message)
           }
 
           // تحميل المقابلات
@@ -552,6 +565,7 @@ export const useStore = create<AppState>()(
 
           if (interviewsError) {
             console.error('خطأ في تحميل المقابلات:', interviewsError)
+            console.error('تفاصيل الخطأ:', interviewsError.message)
           }
 
           // تحميل المرشحين المحفوظين
@@ -562,6 +576,7 @@ export const useStore = create<AppState>()(
 
           if (savedError) {
             console.error('خطأ في تحميل المرشحين المحفوظين:', savedError)
+            console.error('تفاصيل الخطأ:', savedError.message)
           }
 
           // تحميل الإشعارات
@@ -572,6 +587,7 @@ export const useStore = create<AppState>()(
 
           if (notificationsError) {
             console.error('خطأ في تحميل الإشعارات:', notificationsError)
+            console.error('تفاصيل الخطأ:', notificationsError.message)
           }
 
           // حساب الإحصائيات
@@ -583,10 +599,63 @@ export const useStore = create<AppState>()(
             rejectedCandidates: candidates?.filter(c => c.offer_result === 'مرفوض').length || 0
           }
 
+          // تحويل البيانات من snake_case إلى camelCase للواجهة الأمامية
+          const transformedCandidates = (candidates || []).map(candidate => ({
+            id: candidate.id,
+            name: candidate.name,
+            nationalId: candidate.national_id,
+            birthDate: candidate.birth_date,
+            governorate: candidate.governorate,
+            qualification: candidate.qualification,
+            maritalStatus: candidate.marital_status,
+            securityCompany: candidate.security_company,
+            offerDate: candidate.offer_date,
+            offerResult: candidate.offer_result,
+            status: candidate.status,
+            createdBy: candidate.created_by,
+            isRejectedBefore: candidate.is_rejected_before,
+            previousRejectionDate: candidate.previous_rejection_date,
+            createdAt: candidate.created_at,
+            updatedAt: candidate.updated_at
+          }))
+
+          const transformedInterviews = (interviews || []).map(interview => ({
+            id: interview.id,
+            candidateId: interview.candidate_id,
+            candidateName: interview.candidate_name,
+            position: interview.position,
+            date: interview.date,
+            time: interview.time,
+            status: interview.status,
+            notes: interview.notes,
+            interviewer: interview.interviewer,
+            createdAt: interview.created_at,
+            updatedAt: interview.updated_at
+          }))
+
+          const transformedSavedCandidates = (savedCandidates || []).map(saved => ({
+            id: saved.id,
+            name: saved.name,
+            nationalId: saved.national_id,
+            birthDate: saved.birth_date,
+            governorate: saved.governorate,
+            qualification: saved.qualification,
+            maritalStatus: saved.marital_status,
+            securityCompany: saved.security_company,
+            offerDate: saved.offer_date,
+            finalResult: saved.final_result,
+            decisionDate: saved.decision_date,
+            decisionBy: saved.decision_by,
+            notes: saved.notes,
+            isRejectedBefore: saved.is_rejected_before,
+            previousRejectionDate: saved.previous_rejection_date,
+            createdAt: saved.created_at
+          }))
+
           set({
-            candidates: candidates || [],
-            interviews: interviews || [],
-            savedCandidates: savedCandidates || [],
+            candidates: transformedCandidates,
+            interviews: transformedInterviews,
+            savedCandidates: transformedSavedCandidates,
             notifications: notifications || [],
             stats,
             isInitialized: true

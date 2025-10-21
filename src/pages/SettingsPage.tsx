@@ -17,7 +17,7 @@ const SettingsPage: React.FC = () => {
   const getSystemInfo = () => {
     return {
       version: '2.0.0',
-      lastUpdate: new Date().toLocaleDateString('ar-SA'),
+      lastUpdate: new Date().toLocaleDateString('en-GB'),
       totalUsers: users.length,
       systemStatus: 'متصل'
     }

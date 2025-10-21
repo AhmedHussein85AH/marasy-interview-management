@@ -96,6 +96,12 @@ ALTER TABLE saved_candidates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- سياسات الأمان - السماح للجميع بالقراءة والكتابة (للمشروع التجريبي)
+DROP POLICY IF EXISTS "Allow all operations for demo" ON users;
+DROP POLICY IF EXISTS "Allow all operations for demo" ON candidates;
+DROP POLICY IF EXISTS "Allow all operations for demo" ON interviews;
+DROP POLICY IF EXISTS "Allow all operations for demo" ON saved_candidates;
+DROP POLICY IF EXISTS "Allow all operations for demo" ON notifications;
+
 CREATE POLICY "Allow all operations for demo" ON users FOR ALL USING (true);
 CREATE POLICY "Allow all operations for demo" ON candidates FOR ALL USING (true);
 CREATE POLICY "Allow all operations for demo" ON interviews FOR ALL USING (true);

@@ -154,7 +154,7 @@ const DatabasePage: React.FC = () => {
                         {notification.message}
                       </div>
                       <div style={{ color: '#856404', fontSize: '12px', marginTop: '5px' }}>
-                        {notification.candidateName} - {new Date(notification.createdAt).toLocaleDateString('ar-SA')}
+                        {notification.candidateName} - {new Date(notification.createdAt).toLocaleDateString('en-GB')}
                       </div>
                     </div>
                     <button
@@ -340,7 +340,7 @@ const DatabasePage: React.FC = () => {
                     </span>
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {new Date(candidate.decisionDate).toLocaleDateString('ar-SA')}
+                    {new Date(candidate.decisionDate).toLocaleDateString('en-GB')}
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     {candidate.decisionBy}
