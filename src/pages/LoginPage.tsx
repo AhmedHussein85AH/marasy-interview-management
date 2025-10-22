@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { supabase } from '../integrations/supabase/client'
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -8,7 +9,7 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
-  const { login, users, initializeDemoData } = useStore()
+  const { login, users, initializeDemoData, loginWithSupabase } = useStore()
 
   useEffect(() => {
     // التأكد من تهيئة البيانات عند تحميل الصفحة
@@ -48,35 +49,37 @@ const LoginPage: React.FC = () => {
       return
     }
 
-    console.log('🔍 محاولة تسجيل الدخول من الصفحة...')
-    console.log('📧 البريد الإلكتروني:', email)
-    console.log('🔑 كلمة المرور:', password)
-    console.log('👥 المستخدمون المتاحون:', users.map(u => u.email))
+    // أولاً: محاولة تسجيل الدخول عبر Supabase Auth
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (!error && data.session) {
+        await loginWithSupabase(email)
+        return
+      }
+      // فشل Supabase → نرجع للوضع التجريبي الحالي
+    } catch (err) {
+      // نتجاهل ونستخدم المسار التجريبي
+    }
 
-    // التحقق المباشر من كلمات المرور
+    // مسار تجريبي احتياطي (معطل في الإنتاج)
+    const isProduction = import.meta.env.PROD
+    const allowDemoLogin = import.meta.env.VITE_ALLOW_DEMO_LOGIN === 'true'
+    
+    if (isProduction && !allowDemoLogin) {
+      setError('تسجيل الدخول التجريبي معطل في الإنتاج')
+      return
+    }
     const passwords: { [key: string]: string } = {
       'security@company.com': 'Sec@135$',
       'interview@company.com': 'Man@135$',
       'admin@company.com': 'Adm@135$'
     }
-
     const expectedPassword = passwords[email]
-    console.log('🔐 كلمة المرور المتوقعة:', expectedPassword)
-    console.log('✅ تطابق كلمة المرور:', expectedPassword === password)
-
     if (expectedPassword === password) {
-      // البحث عن المستخدم في القائمة
       const user = users.find(u => u.email === email)
-      console.log('👤 المستخدم الموجود:', user)
-      
       if (user) {
-        // تسجيل الدخول مباشرة
-        console.log('🚀 بدء تسجيل الدخول...')
         const success = await login(email, password)
-        console.log('🎉 نتيجة تسجيل الدخول:', success)
-        if (!success) {
-          setError('فشل في تسجيل الدخول - حاول مرة أخرى')
-        }
+        if (!success) setError('فشل في تسجيل الدخول - حاول مرة أخرى')
       } else {
         setError('المستخدم غير موجود - اضغط "إعادة تهيئة البيانات"')
       }

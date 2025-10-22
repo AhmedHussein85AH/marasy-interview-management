@@ -10,6 +10,7 @@ import InterviewsPage from './pages/InterviewsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import DatabasePage from './pages/DatabasePage'
 import SettingsPage from './pages/SettingsPage'
+import Users from './pages/Users'
 
 const App: React.FC = () => {
   const { currentUser, initializeDemoData, isInitialized } = useStore()
@@ -60,6 +61,11 @@ const App: React.FC = () => {
           <Route path="/database" element={
             <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
               <DatabasePage />
+            </ProtectedLayout>
+          } />
+          <Route path="/users" element={
+            <ProtectedLayout requiredPermissions={['admin']}>
+              <Users />
             </ProtectedLayout>
           } />
           <Route path="/settings" element={

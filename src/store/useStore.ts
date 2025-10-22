@@ -121,6 +121,8 @@ export interface AppState {
   // الإجراءات
   login: (email: string, password: string) => Promise<boolean>
   logout: () => void
+  // New: login via Supabase and set current user directly
+  loginWithSupabase: (email: string) => Promise<boolean>
   addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void
   updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult']) => void
   deleteCandidate: (id: string) => void
@@ -136,9 +138,13 @@ export interface AppState {
   markNotificationAsRead: (id: string) => void
   getUnreadNotifications: () => Notification[]
   checkRejectedBefore: (nationalId: string) => { isRejected: boolean; date?: string }
-  initializeDemoData: () => void
-  resetData: () => void
-}
+    initializeDemoData: () => void
+    resetData: () => void
+    // إدارة المستخدمين من Supabase
+    loadUsersFromSupabase: () => Promise<void>
+    addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
+    updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
+  }
 
 // إنشاء المتجر - بدون تخزين محلي
 export const useStore = create<AppState>()(
@@ -207,6 +213,56 @@ export const useStore = create<AppState>()(
       // تسجيل الخروج
       logout: () => {
         set({ currentUser: null })
+        try {
+          // محاولة تسجيل الخروج من Supabase إن وُجدت جلسة
+          supabase.auth.signOut()
+        } catch {}
+      },
+
+      // تسجيل دخول عبر Supabase (بعد نجاح المصادقة هناك)
+      loginWithSupabase: async (email: string) => {
+        try {
+          // جلب بيانات المستخدم من جدول users في Supabase
+          const { data, error } = await supabase
+            .from('users')
+            .select('id, name, email, user_type, department, created_at')
+            .eq('email', email)
+            .maybeSingle()
+
+          if (error) throw error
+
+          let mappedUser: User
+          if (data) {
+            mappedUser = {
+              id: data.id,
+              name: data.name,
+              email: data.email,
+              userType: data.user_type as UserType,
+              department: data.department,
+              createdAt: data.created_at
+            }
+          } else {
+            // في حال عدم وجود صف، ننشئ مستخدماً افتراضياً بحد أدنى من المعلومات
+            mappedUser = {
+              id: Date.now().toString(),
+              name: email.split('@')[0],
+              email,
+              userType: 'security_employee',
+              department: 'General',
+              createdAt: new Date().toISOString()
+            }
+          }
+
+          set({ currentUser: mappedUser })
+          // إضافة المستخدم للذاكرة إن لم يكن موجوداً في القائمة الحالية
+          const existing = get().users.find(u => u.email === mappedUser.email)
+          if (!existing) {
+            set(state => ({ users: [...state.users, mappedUser] }))
+          }
+          return true
+        } catch (e) {
+          return false
+        }
       },
 
       // إضافة مرشح
@@ -709,9 +765,77 @@ export const useStore = create<AppState>()(
 
         // تحميل البيانات من Supabase
         await get().loadDataFromSupabase()
+        await get().loadUsersFromSupabase()
 
         console.log('تم تهيئة البيانات التجريبية بنجاح')
         console.log('المستخدمون المتاحون:', demoUsers.map(u => u.email))
+      },
+
+      // تحميل المستخدمين من Supabase
+      loadUsersFromSupabase: async () => {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('id, name, email, user_type, department, created_at')
+            .order('created_at', { ascending: false })
+          
+          if (!error && data) {
+            const mapped: User[] = data.map(u => ({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              userType: u.user_type as UserType,
+              department: u.department,
+              createdAt: u.created_at
+            }))
+            set({ users: mapped })
+          }
+        } catch (error) {
+          console.error('خطأ في تحميل المستخدمين:', error)
+        }
+      },
+
+      // إضافة مستخدم إلى Supabase
+      addUserToSupabase: async (user) => {
+        const { data, error } = await supabase
+          .from('users')
+          .insert([{ 
+            name: user.name, 
+            email: user.email, 
+            user_type: user.userType, 
+            department: user.department 
+          }])
+          .select('id, name, email, user_type, department, created_at')
+          .single()
+        
+        if (error) throw error
+        
+        const mapped: User = {
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          userType: data.user_type as UserType,
+          department: data.department,
+          createdAt: data.created_at
+        }
+        
+        set(state => ({ users: [mapped, ...state.users] }))
+      },
+
+      // تحديث دور المستخدم
+      updateUserRoleInSupabase: async (id, userType) => {
+        const { error } = await supabase
+          .from('users')
+          .update({ user_type: userType })
+          .eq('id', id)
+        
+        if (error) throw error
+        
+        set(state => ({ 
+          users: state.users.map(u => 
+            u.id === id ? { ...u, userType } : u
+          ) 
+        }))
       },
 
       // إعادة تعيين البيانات
