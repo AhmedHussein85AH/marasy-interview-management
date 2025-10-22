@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Users, Mail, Lock, Eye, EyeOff } from 'lucide-react'
@@ -11,13 +11,38 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
   const { setAuthenticated, setCurrentUser } = useStore()
 
+  // تحميل البيانات المحفوظة عند تحميل الصفحة
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail')
+    const savedPassword = localStorage.getItem('rememberedPassword')
+    const savedRememberMe = localStorage.getItem('rememberMe') === 'true'
+    
+    if (savedRememberMe && savedEmail && savedPassword) {
+      setEmail(savedEmail)
+      setPassword(savedPassword)
+      setRememberMe(true)
+    }
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+
+    // حفظ البيانات إذا تم اختيار "تذكرني"
+    if (rememberMe) {
+      localStorage.setItem('rememberedEmail', email)
+      localStorage.setItem('rememberedPassword', password)
+      localStorage.setItem('rememberMe', 'true')
+    } else {
+      localStorage.removeItem('rememberedEmail')
+      localStorage.removeItem('rememberedPassword')
+      localStorage.removeItem('rememberMe')
+    }
 
     // Simulate login process
     setTimeout(() => {
@@ -121,6 +146,24 @@ export default function Login() {
                     )}
                   </button>
                 </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.45 }}
+                className="flex items-center space-x-2"
+              >
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="rememberMe" className="text-sm text-muted-foreground cursor-pointer">
+                  تذكرني
+                </label>
               </motion.div>
 
               <motion.div
