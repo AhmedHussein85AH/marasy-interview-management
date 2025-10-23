@@ -97,7 +97,7 @@ const BulkUploadPage: React.FC = () => {
       securityCompany: item.اسم_الشركة?.toString() || '',
       offerDate: item.تاريخ_العرض?.toString() || '',
       finalResult: (item.النتيجة_النهائية?.toString() || 'مقبول') as 'مقبول' | 'مرفوض' | 'مستبعد',
-      decisionDate: item.تاريخ_القرار?.toString() || new Date().toISOString(),
+      decisionDate: item.تاريخ_القرار?.toString() || new Date().toISOString().split('T')[0],
       decisionBy: item.قرار_من?.toString() || currentUser?.name || 'مدير النظام',
       notes: item.ملاحظات?.toString() || undefined,
       isRejectedBefore: false,
