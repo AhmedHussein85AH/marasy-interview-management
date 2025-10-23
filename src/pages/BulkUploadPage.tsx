@@ -72,16 +72,33 @@ const BulkUploadPage: React.FC = () => {
   }
 
   // تحويل البيانات إلى التنسيق المطلوب
+  // دالة لتحويل تنسيق التاريخ من DD-MM-YYYY إلى YYYY-MM-DD
+  const convertDateFormat = (dateString: string): string => {
+    if (!dateString) return ''
+    
+    // إذا كان التنسيق DD-MM-YYYY
+    const ddmmyyyyPattern = /^(\d{1,2})-(\d{1,2})-(\d{4})$/
+    const match = dateString.match(ddmmyyyyPattern)
+    
+    if (match) {
+      const [, day, month, year] = match
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    }
+    
+    // إذا كان التنسيق صحيح بالفعل YYYY-MM-DD
+    return dateString
+  }
+
   const convertToCandidates = (data: ExcelCandidate[]) => {
     return data.map(item => ({
       name: item.الاسم?.toString() || '',
       nationalId: item.الرقم_القومي?.toString() || '',
-      birthDate: item.تاريخ_الميلاد?.toString() || '',
+      birthDate: convertDateFormat(item.تاريخ_الميلاد?.toString() || ''),
       governorate: item.المحافظة?.toString() || '',
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
       securityCompany: item.اسم_الشركة?.toString() || '',
-      offerDate: item.تاريخ_العرض?.toString() || '',
+      offerDate: convertDateFormat(item.تاريخ_العرض?.toString() || ''),
       offerResult: (item.النتيجة_النهائية?.toString() || 'في انتظار') as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
     }))
   }
@@ -90,14 +107,14 @@ const BulkUploadPage: React.FC = () => {
     return data.map(item => ({
       name: item.الاسم?.toString() || '',
       nationalId: item.الرقم_القومي?.toString() || '',
-      birthDate: item.تاريخ_الميلاد?.toString() || '',
+      birthDate: convertDateFormat(item.تاريخ_الميلاد?.toString() || ''),
       governorate: item.المحافظة?.toString() || '',
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
       securityCompany: item.اسم_الشركة?.toString() || '',
-      offerDate: item.تاريخ_العرض?.toString() || '',
+      offerDate: convertDateFormat(item.تاريخ_العرض?.toString() || ''),
       finalResult: (item.النتيجة_النهائية?.toString() || 'مقبول') as 'مقبول' | 'مرفوض' | 'مستبعد',
-      decisionDate: item.تاريخ_القرار?.toString() || new Date().toISOString().split('T')[0],
+      decisionDate: convertDateFormat(item.تاريخ_القرار?.toString() || '') || new Date().toISOString().split('T')[0],
       decisionBy: item.قرار_من?.toString() || currentUser?.name || 'مدير النظام',
       notes: item.ملاحظات?.toString() || undefined,
       isRejectedBefore: false,
