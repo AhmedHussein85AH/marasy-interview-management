@@ -15,6 +15,7 @@ const CandidatesPage: React.FC = () => {
   
   const [showAddForm, setShowAddForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterCompany, setFilterCompany] = useState('')
   const [filteredCandidates, setFilteredCandidates] = useState(candidates)
   const [newCandidate, setNewCandidate] = useState({
     name: '',
@@ -29,12 +30,22 @@ const CandidatesPage: React.FC = () => {
   })
 
   useEffect(() => {
+    let filtered = candidates
+
+    // تطبيق البحث
     if (searchQuery) {
-      setFilteredCandidates(searchCandidates(searchQuery))
-    } else {
-      setFilteredCandidates(candidates)
+      filtered = searchCandidates(searchQuery)
     }
-  }, [searchQuery, candidates])
+
+    // تطبيق الفلتر حسب الشركة
+    if (filterCompany) {
+      filtered = filtered.filter(candidate => 
+        candidate.securityCompany.toLowerCase().includes(filterCompany.toLowerCase())
+      )
+    }
+
+    setFilteredCandidates(filtered)
+  }, [searchQuery, filterCompany, candidates])
 
   const handleAddCandidate = () => {
     if (!newCandidate.name || !newCandidate.nationalId || !newCandidate.birthDate || 
@@ -73,6 +84,7 @@ const CandidatesPage: React.FC = () => {
     }
   }
 
+
   const handleDeleteCandidate = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا المرشح؟')) {
       deleteCandidate(id)
@@ -83,6 +95,13 @@ const CandidatesPage: React.FC = () => {
   const canAddCandidate = currentUser?.userType === 'security_employee' || currentUser?.userType === 'admin'
   const canUpdateStatus = currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
   const canDelete = currentUser?.userType === 'admin'
+
+  // إضافة رسالة توضيحية للمستخدمين غير المصرح لهم
+  console.log('نوع المستخدم الحالي:', currentUser?.userType)
+  console.log('يمكن الحذف:', canDelete)
+
+  // الحصول على قائمة الشركات الفريدة
+  const uniqueCompanies = Array.from(new Set(candidates.map(c => c.securityCompany))).filter(Boolean)
 
   return (
     <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
@@ -99,6 +118,16 @@ const CandidatesPage: React.FC = () => {
         }}>
           <h2 style={{ color: '#2c3e50', margin: 0 }}>
             المرشحين ({filteredCandidates.length})
+            {!canDelete && (
+              <span style={{ 
+                fontSize: '12px', 
+                color: '#7f8c8d', 
+                marginLeft: '10px',
+                fontWeight: 'normal'
+              }}>
+                (صلاحيات محدودة - الأدمن فقط يمكنه الحذف)
+              </span>
+            )}
           </h2>
           
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -114,6 +143,22 @@ const CandidatesPage: React.FC = () => {
                 width: '250px'
               }}
             />
+
+            {/* فلتر الشركة */}
+            <select
+              value={filterCompany}
+              onChange={(e) => setFilterCompany(e.target.value)}
+              style={{
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '5px'
+              }}
+            >
+              <option value="">جميع الشركات</option>
+              {uniqueCompanies.map(company => (
+                <option key={company} value={company}>{company}</option>
+              ))}
+            </select>
             
             {canAddCandidate && (
               <button
@@ -313,6 +358,9 @@ const CandidatesPage: React.FC = () => {
                   الحالة الاجتماعية
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  اسم الشركة
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
                   نتيجة العرض
                 </th>
                 {canUpdateStatus && (
@@ -356,6 +404,9 @@ const CandidatesPage: React.FC = () => {
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     {candidate.maritalStatus}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#3498db' }}>
+                    {candidate.securityCompany}
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     <span style={{
@@ -401,20 +452,6 @@ const CandidatesPage: React.FC = () => {
                         >
                           رفض
                         </button>
-                        <button
-                          onClick={() => handleStatusUpdate(candidate.id, 'مرفوض', 'مستبعد')}
-                          style={{
-                            backgroundColor: '#f39c12',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          استبعاد
-                        </button>
                       </div>
                     </td>
                   )}
@@ -450,6 +487,24 @@ const CandidatesPage: React.FC = () => {
             <p>لا توجد مرشحين متطابقين مع البحث</p>
           </div>
         )}
+
+        {/* رسالة توضيحية للمستخدمين غير المصرح لهم */}
+        {!canDelete && filteredCandidates.length > 0 && (
+          <div style={{
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            borderRadius: '8px',
+            padding: '15px',
+            marginTop: '20px',
+            textAlign: 'center'
+          }}>
+            <p style={{ color: '#856404', margin: 0 }}>
+              <strong>ملاحظة:</strong> أزرار الحذف متاحة فقط للمديرين (الأدمن). 
+              نوع المستخدم الحالي: <strong>{currentUser?.userType}</strong>
+            </p>
+          </div>
+        )}
+
       </div>
     </ProtectedLayout>
   )

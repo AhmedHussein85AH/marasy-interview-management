@@ -48,10 +48,12 @@ export interface SavedCandidate {
   maritalStatus: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
   securityCompany: string
   offerDate: string
-  finalResult: 'مقبول' | 'مرفوض' | 'مستبعد'
+  finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة'
   decisionDate: string
   decisionBy: string
   notes?: string
+  exclusionReason?: string
+  resignationReason?: string
   isRejectedBefore: boolean
   previousRejectionDate?: string
   createdAt: string
@@ -126,24 +128,33 @@ export interface AppState {
   addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void
   updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult']) => void
   deleteCandidate: (id: string) => void
-  saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد', notes?: string) => Promise<void>
+  saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة', notes?: string, exclusionReason?: string, resignationReason?: string) => Promise<void>
   addInterview: (interview: Omit<Interview, 'id' | 'createdAt' | 'updatedAt'>) => void
   updateInterview: (id: string, updates: Partial<Interview>) => void
   deleteInterview: (id: string) => void
   getCandidatesByStatus: (status: Candidate['status']) => Candidate[]
   searchCandidates: (query: string) => Candidate[]
   searchSavedCandidates: (query: string) => SavedCandidate[]
+  searchSavedCandidatesByCompany: (company: string) => SavedCandidate[]
   getSavedCandidatesByResult: (result: 'مقبول' | 'مرفوض' | 'مستبعد') => SavedCandidate[]
+  deleteSavedCandidate: (id: string) => Promise<void>
+  deleteMultipleSavedCandidates: (ids: string[]) => Promise<void>
+  removeDuplicateSavedCandidates: () => Promise<number>
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => void
   markNotificationAsRead: (id: string) => void
   getUnreadNotifications: () => Notification[]
   checkRejectedBefore: (nationalId: string) => { isRejected: boolean; date?: string }
-    initializeDemoData: () => void
-    resetData: () => void
-    // إدارة المستخدمين من Supabase
-    loadUsersFromSupabase: () => Promise<void>
-    addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
-    updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
+  initializeDemoData: () => void
+  resetData: () => void
+  restoreUserSession: () => boolean
+  saveUserSession: (user: User) => void
+  bulkAddCandidates: (candidates: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => Promise<{ success: number; failed: number; errors: string[] }>
+  bulkAddSavedCandidates: (candidates: Omit<SavedCandidate, 'id' | 'createdAt'>[]) => Promise<{ success: number; failed: number; errors: string[] }>
+  set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
+  // إدارة المستخدمين من Supabase
+  loadUsersFromSupabase: () => Promise<void>
+  addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
+  updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
   }
 
 // إنشاء المتجر - بدون تخزين محلي
@@ -200,6 +211,8 @@ export const useStore = create<AppState>()(
         if (expectedPassword === password) {
           console.log('🚀 [STORE] حفظ المستخدم في الحالة...')
           set({ currentUser: user })
+          // حفظ الجلسة في localStorage
+          get().saveUserSession(user)
           console.log('🎉 [STORE] تم تسجيل الدخول بنجاح!')
           console.log('👤 [STORE] المستخدم:', user.name)
           console.log('🏢 [STORE] القسم:', user.department)
@@ -213,6 +226,8 @@ export const useStore = create<AppState>()(
       // تسجيل الخروج
       logout: () => {
         set({ currentUser: null })
+        // حذف الجلسة من localStorage
+        localStorage.removeItem('currentUser')
         try {
           // محاولة تسجيل الخروج من Supabase إن وُجدت جلسة
           supabase.auth.signOut()
@@ -254,6 +269,8 @@ export const useStore = create<AppState>()(
           }
 
           set({ currentUser: mappedUser })
+          // حفظ الجلسة في localStorage
+          get().saveUserSession(mappedUser)
           // إضافة المستخدم للذاكرة إن لم يكن موجوداً في القائمة الحالية
           const existing = get().users.find(u => u.email === mappedUser.email)
           if (!existing) {
@@ -493,44 +510,98 @@ export const useStore = create<AppState>()(
       },
 
       // حفظ مرشح في قاعدة البيانات
-      saveCandidateToDatabase: async (candidate, finalResult, notes) => {
-        const { currentUser } = get()
+      saveCandidateToDatabase: async (candidate, finalResult, notes, exclusionReason?, resignationReason?) => {
+        const { currentUser, savedCandidates } = get()
         if (!currentUser) return
 
         try {
-          const savedCandidate = {
-            name: candidate.name,
-            national_id: candidate.nationalId,
-            birth_date: candidate.birthDate,
-            governorate: candidate.governorate,
-            qualification: candidate.qualification,
-            marital_status: candidate.maritalStatus,
-            security_company: candidate.securityCompany,
-            offer_date: candidate.offerDate,
-            final_result: finalResult,
-            decision_date: new Date().toISOString(),
-            decision_by: currentUser.name,
-            notes: notes || null,
-            is_rejected_before: candidate.isRejectedBefore || false,
-            previous_rejection_date: candidate.previousRejectionDate || null
+          // فحص إذا كان المرشح محفوظ مسبقاً بنفس الرقم القومي
+          const existingCandidate = savedCandidates.find(
+            saved => saved.nationalId === candidate.nationalId
+          )
+
+          if (existingCandidate) {
+            // تحديث السجل الموجود بدلاً من إنشاء سجل جديد
+            const updatedCandidate = {
+              name: candidate.name,
+              national_id: candidate.nationalId,
+              birth_date: candidate.birthDate,
+              governorate: candidate.governorate,
+              qualification: candidate.qualification,
+              marital_status: candidate.maritalStatus,
+              security_company: candidate.securityCompany,
+              offer_date: candidate.offerDate,
+              final_result: finalResult,
+              decision_date: new Date().toISOString(),
+              decision_by: currentUser.name,
+              notes: notes || null,
+              exclusion_reason: exclusionReason || null,
+              resignation_reason: resignationReason || null,
+              is_rejected_before: candidate.isRejectedBefore || false,
+              previous_rejection_date: candidate.previousRejectionDate || null
+            }
+
+            // تحديث في Supabase
+            const { data, error } = await supabase
+              .from('saved_candidates')
+              .update(updatedCandidate)
+              .eq('id', existingCandidate.id)
+              .select()
+              .single()
+
+            if (error) {
+              console.error('خطأ في تحديث المرشح:', error)
+              throw error
+            }
+
+            // تحديث الحالة المحلية
+            set(state => ({
+              savedCandidates: state.savedCandidates.map(saved =>
+                saved.id === existingCandidate.id ? data : saved
+              )
+            }))
+
+            console.log('تم تحديث المرشح الموجود بدلاً من إنشاء سجل جديد')
+          } else {
+            // إنشاء سجل جديد إذا لم يكن موجوداً
+            const savedCandidate = {
+              name: candidate.name,
+              national_id: candidate.nationalId,
+              birth_date: candidate.birthDate,
+              governorate: candidate.governorate,
+              qualification: candidate.qualification,
+              marital_status: candidate.maritalStatus,
+              security_company: candidate.securityCompany,
+              offer_date: candidate.offerDate,
+              final_result: finalResult,
+              decision_date: new Date().toISOString(),
+              decision_by: currentUser.name,
+              notes: notes || null,
+              exclusion_reason: exclusionReason || null,
+              resignation_reason: resignationReason || null,
+              is_rejected_before: candidate.isRejectedBefore || false,
+              previous_rejection_date: candidate.previousRejectionDate || null
+            }
+
+            // إضافة إلى Supabase
+            const { data, error } = await supabase
+              .from('saved_candidates')
+              .insert([savedCandidate])
+              .select()
+              .single()
+
+            if (error) {
+              console.error('خطأ في حفظ المرشح:', error)
+              throw error
+            }
+
+            // تحديث الحالة المحلية
+            set(state => ({
+              savedCandidates: [...state.savedCandidates, data]
+            }))
+
+            console.log('تم إنشاء سجل جديد للمرشح')
           }
-
-          // إضافة إلى Supabase
-          const { data, error } = await supabase
-            .from('saved_candidates')
-            .insert([savedCandidate])
-            .select()
-            .single()
-
-          if (error) {
-            console.error('خطأ في حفظ المرشح:', error)
-            throw error
-          }
-
-          // تحديث الحالة المحلية
-          set(state => ({
-            savedCandidates: [...state.savedCandidates, data]
-          }))
         } catch (error) {
           console.error('خطأ في حفظ المرشح:', error)
           throw error
@@ -545,8 +616,146 @@ export const useStore = create<AppState>()(
           candidate.name.toLowerCase().includes(lowercaseQuery) ||
           candidate.nationalId.includes(query) ||
           candidate.governorate.toLowerCase().includes(lowercaseQuery) ||
-          candidate.qualification.toLowerCase().includes(lowercaseQuery)
+          candidate.qualification.toLowerCase().includes(lowercaseQuery) ||
+          candidate.securityCompany.toLowerCase().includes(lowercaseQuery)
         )
+      },
+
+      // البحث في قاعدة البيانات المحفوظة حسب الشركة
+      searchSavedCandidatesByCompany: (company) => {
+        const { savedCandidates } = get()
+        const lowercaseCompany = company.toLowerCase()
+        return savedCandidates.filter(candidate =>
+          candidate.securityCompany.toLowerCase().includes(lowercaseCompany)
+        )
+      },
+
+      // حذف مرشح من قاعدة البيانات المحفوظة
+      deleteSavedCandidate: async (id) => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') return
+
+        try {
+          // حذف من Supabase
+          const { error } = await supabase
+            .from('saved_candidates')
+            .delete()
+            .eq('id', id)
+
+          if (error) {
+            console.error('خطأ في حذف المرشح المحفوظ:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            savedCandidates: state.savedCandidates.filter(candidate => candidate.id !== id)
+          }))
+
+          console.log('تم حذف المرشح من قاعدة البيانات المحفوظة')
+        } catch (error) {
+          console.error('خطأ في حذف المرشح المحفوظ:', error)
+          throw error
+        }
+      },
+
+      // حذف عدة مرشحين من قاعدة البيانات المحفوظة
+      deleteMultipleSavedCandidates: async (ids) => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') return
+
+        try {
+          // حذف من Supabase
+          const { error } = await supabase
+            .from('saved_candidates')
+            .delete()
+            .in('id', ids)
+
+          if (error) {
+            console.error('خطأ في حذف المرشحين المحفوظين:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            savedCandidates: state.savedCandidates.filter(candidate => !ids.includes(candidate.id))
+          }))
+
+          console.log(`تم حذف ${ids.length} مرشح من قاعدة البيانات المحفوظة`)
+        } catch (error) {
+          console.error('خطأ في حذف المرشحين المحفوظين:', error)
+          throw error
+        }
+      },
+
+      // حذف البيانات المكررة من قاعدة البيانات المحفوظة
+      removeDuplicateSavedCandidates: async () => {
+        const { currentUser, savedCandidates } = get()
+        if (!currentUser || currentUser.userType !== 'admin') return
+
+        try {
+          console.log('بدء حذف البيانات المكررة...')
+          
+          // تجميع المرشحين حسب الرقم القومي
+          const candidatesByNationalId = new Map<string, SavedCandidate[]>()
+          
+          savedCandidates.forEach(candidate => {
+            if (!candidatesByNationalId.has(candidate.nationalId)) {
+              candidatesByNationalId.set(candidate.nationalId, [])
+            }
+            candidatesByNationalId.get(candidate.nationalId)!.push(candidate)
+          })
+
+          // العثور على المرشحين المكررين
+          const duplicatesToRemove: string[] = []
+          
+          candidatesByNationalId.forEach((candidates, nationalId) => {
+            if (candidates.length > 1) {
+              console.log(`تم العثور على ${candidates.length} سجل مكرر للرقم القومي: ${nationalId}`)
+              
+              // ترتيب المرشحين حسب تاريخ الإنشاء (الأحدث أولاً)
+              candidates.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              
+              // الاحتفاظ بأحدث سجل وحذف الباقي
+              const keepCandidate = candidates[0]
+              const removeCandidates = candidates.slice(1)
+              
+              console.log(`الاحتفاظ بالسجل الأحدث: ${keepCandidate.name} (${keepCandidate.id})`)
+              console.log(`حذف ${removeCandidates.length} سجل مكرر`)
+              
+              removeCandidates.forEach(candidate => {
+                duplicatesToRemove.push(candidate.id)
+              })
+            }
+          })
+
+          if (duplicatesToRemove.length > 0) {
+            // حذف البيانات المكررة من Supabase
+            const { error } = await supabase
+              .from('saved_candidates')
+              .delete()
+              .in('id', duplicatesToRemove)
+
+            if (error) {
+              console.error('خطأ في حذف البيانات المكررة:', error)
+              throw error
+            }
+
+            // تحديث الحالة المحلية
+            set(state => ({
+              savedCandidates: state.savedCandidates.filter(candidate => !duplicatesToRemove.includes(candidate.id))
+            }))
+
+            console.log(`تم حذف ${duplicatesToRemove.length} سجل مكرر بنجاح`)
+            return duplicatesToRemove.length
+          } else {
+            console.log('لا توجد بيانات مكررة للحذف')
+            return 0
+          }
+        } catch (error) {
+          console.error('خطأ في حذف البيانات المكررة:', error)
+          throw error
+        }
       },
 
       // الحصول على المرشحين المحفوظين حسب النتيجة
@@ -703,6 +912,8 @@ export const useStore = create<AppState>()(
             decisionDate: saved.decision_date,
             decisionBy: saved.decision_by,
             notes: saved.notes,
+            exclusionReason: saved.exclusion_reason,
+            resignationReason: saved.resignation_reason,
             isRejectedBefore: saved.is_rejected_before,
             previousRejectionDate: saved.previous_rejection_date,
             createdAt: saved.created_at
@@ -723,9 +934,42 @@ export const useStore = create<AppState>()(
         }
       },
 
+      // استعادة حالة المستخدم من localStorage
+      restoreUserSession: () => {
+        try {
+          const savedUser = localStorage.getItem('currentUser')
+          if (savedUser) {
+            const user = JSON.parse(savedUser)
+            set({ currentUser: user })
+            console.log('تم استعادة جلسة المستخدم:', user.name)
+            return true
+          }
+        } catch (error) {
+          console.error('خطأ في استعادة جلسة المستخدم:', error)
+          localStorage.removeItem('currentUser')
+        }
+        return false
+      },
+
+      // حفظ حالة المستخدم في localStorage
+      saveUserSession: (user: User) => {
+        try {
+          localStorage.setItem('currentUser', JSON.stringify(user))
+          console.log('تم حفظ جلسة المستخدم:', user.name)
+        } catch (error) {
+          console.error('خطأ في حفظ جلسة المستخدم:', error)
+        }
+      },
+
       // تهيئة البيانات التجريبية
       initializeDemoData: async () => {
         console.log('بدء تهيئة البيانات التجريبية...')
+        
+        // محاولة استعادة جلسة المستخدم أولاً
+        const sessionRestored = get().restoreUserSession()
+        if (sessionRestored) {
+          console.log('تم استعادة جلسة المستخدم بنجاح')
+        }
         
         // إنشاء المستخدمين التجريبيين دائماً
         const demoUsers: User[] = [
@@ -838,28 +1082,116 @@ export const useStore = create<AppState>()(
         }))
       },
 
-      // إعادة تعيين البيانات
-      resetData: () => {
-        console.log('🔄 [STORE] إعادة تعيين البيانات...')
-        
-        set({
-          users: [],
-          currentUser: null,
-          candidates: [],
-          savedCandidates: [],
-          notifications: [],
-          interviews: [],
-          stats: {
-            totalCandidates: 0,
-            pendingInterviews: 0,
-            completedInterviews: 0,
-            hiredCandidates: 0,
-            rejectedCandidates: 0
-          },
-          isInitialized: false
-        })
-        
-        console.log('✅ [STORE] تم مسح جميع البيانات وإعادة التعيين')
+  // إضافة عدة مرشحين من ملف Excel
+  bulkAddCandidates: async (candidates: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
+    const { currentUser } = get()
+    if (!currentUser || currentUser.userType !== 'admin') return { success: 0, failed: 0, errors: [] }
+
+    let successCount = 0
+    let failedCount = 0
+    const errors: string[] = []
+
+    try {
+      for (const candidateData of candidates) {
+        try {
+          // فحص إذا كان المرشح موجود مسبقاً
+          const existingCandidate = get().candidates.find(
+            c => c.nationalId === candidateData.nationalId
+          )
+
+          if (existingCandidate) {
+            errors.push(`المرشح ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً`)
+            failedCount++
+            continue
+          }
+
+          // إضافة المرشح
+          await get().addCandidate(candidateData)
+          successCount++
+        } catch (error) {
+          errors.push(`خطأ في إضافة ${candidateData.name}: ${error}`)
+          failedCount++
+        }
       }
+
+      return { success: successCount, failed: failedCount, errors }
+    } catch (error) {
+      console.error('خطأ في إضافة المرشحين:', error)
+      throw error
+    }
+  },
+
+  // إضافة عدة مرشحين محفوظين من ملف Excel
+  bulkAddSavedCandidates: async (candidates: Omit<SavedCandidate, 'id' | 'createdAt'>[]) => {
+    const { currentUser } = get()
+    if (!currentUser || currentUser.userType !== 'admin') return { success: 0, failed: 0, errors: [] }
+
+    let successCount = 0
+    let failedCount = 0
+    const errors: string[] = []
+
+    try {
+      for (const candidateData of candidates) {
+        try {
+          // فحص إذا كان المرشح موجود مسبقاً
+          const existingCandidate = get().savedCandidates.find(
+            c => c.nationalId === candidateData.nationalId
+          )
+
+          if (existingCandidate) {
+            errors.push(`المرشح المحفوظ ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً`)
+            failedCount++
+            continue
+          }
+
+          // إضافة المرشح المحفوظ مباشرة إلى Supabase
+          const { data, error } = await supabase
+            .from('saved_candidates')
+            .insert([{
+              name: candidateData.name,
+              national_id: candidateData.nationalId,
+              birth_date: candidateData.birthDate,
+              governorate: candidateData.governorate,
+              qualification: candidateData.qualification,
+              marital_status: candidateData.maritalStatus,
+              security_company: candidateData.securityCompany,
+              offer_date: candidateData.offerDate,
+              final_result: candidateData.finalResult,
+              decision_date: candidateData.decisionDate,
+              decision_by: candidateData.decisionBy,
+              notes: candidateData.notes || null,
+              is_rejected_before: candidateData.isRejectedBefore,
+              previous_rejection_date: candidateData.previousRejectionDate || null
+            }])
+            .select()
+            .single()
+
+          if (error) {
+            errors.push(`خطأ في إضافة ${candidateData.name}: ${error.message}`)
+            failedCount++
+            continue
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            savedCandidates: [...state.savedCandidates, data]
+          }))
+
+          successCount++
+        } catch (error) {
+          errors.push(`خطأ في إضافة ${candidateData.name}: ${error}`)
+          failedCount++
+        }
+      }
+
+      return { success: successCount, failed: failedCount, errors }
+    } catch (error) {
+      console.error('خطأ في إضافة المرشحين المحفوظين:', error)
+      throw error
+    }
+  },
+
+      // إضافة وظيفة set للوصول المباشر
+      set: set
     })
 )

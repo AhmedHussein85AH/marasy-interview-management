@@ -11,6 +11,7 @@ import AnalyticsPage from './pages/AnalyticsPage'
 import DatabasePage from './pages/DatabasePage'
 import SettingsPage from './pages/SettingsPage'
 import Users from './pages/Users'
+import BulkUploadPage from './pages/BulkUploadPage'
 
 const App: React.FC = () => {
   const { currentUser, initializeDemoData, isInitialized } = useStore()
@@ -66,6 +67,11 @@ const App: React.FC = () => {
           <Route path="/users" element={
             <ProtectedLayout requiredPermissions={['admin']}>
               <Users />
+            </ProtectedLayout>
+          } />
+          <Route path="/bulk-upload" element={
+            <ProtectedLayout requiredPermissions={['admin']}>
+              <BulkUploadPage />
             </ProtectedLayout>
           } />
           <Route path="/settings" element={
