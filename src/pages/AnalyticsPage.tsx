@@ -37,7 +37,7 @@ const AnalyticsPage: React.FC = () => {
   }, {} as Record<string, number>)
 
   return (
-    <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
+    <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
       <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
         <h1 style={{ color: '#2c3e50', marginBottom: '30px' }}>
           التقارير والإحصائيات
