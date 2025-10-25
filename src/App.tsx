@@ -55,7 +55,7 @@ const App: React.FC = () => {
             </ProtectedLayout>
           } />
           <Route path="/analytics" element={
-            <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
+            <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
               <AnalyticsPage />
             </ProtectedLayout>
           } />
@@ -70,7 +70,7 @@ const App: React.FC = () => {
             </ProtectedLayout>
           } />
           <Route path="/bulk-upload" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissions={['security_employee', 'admin']}>
               <BulkUploadPage />
             </ProtectedLayout>
           } />

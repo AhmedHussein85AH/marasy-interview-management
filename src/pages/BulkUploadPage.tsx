@@ -28,7 +28,7 @@ const BulkUploadPage: React.FC = () => {
   const [uploadResult, setUploadResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const canUpload = currentUser?.userType === 'admin'
+  const canUpload = currentUser?.userType === 'security_employee' || currentUser?.userType === 'admin'
 
   // قراءة ملف Excel
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,17 +170,17 @@ const BulkUploadPage: React.FC = () => {
 
   if (!canUpload) {
     return (
-      <ProtectedLayout requiredPermissions={['admin']}>
+      <ProtectedLayout requiredPermissions={['security_employee', 'admin']}>
         <div style={{ padding: '20px', textAlign: 'center' }}>
           <h2 style={{ color: '#e74c3c' }}>غير مصرح لك بالوصول إلى هذه الصفحة</h2>
-          <p>هذه الصفحة متاحة فقط للمديرين (الأدمن)</p>
+          <p>هذه الصفحة متاحة فقط لموظفي الأمن والأدمن</p>
         </div>
       </ProtectedLayout>
     )
   }
 
   return (
-    <ProtectedLayout requiredPermissions={['admin']}>
+    <ProtectedLayout requiredPermissions={['security_employee', 'admin']}>
       <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
         <div style={{
           backgroundColor: 'white',
@@ -233,6 +233,7 @@ const BulkUploadPage: React.FC = () => {
               type="file"
               accept=".xlsx,.xls"
               onChange={handleFileUpload}
+              aria-label="اختر ملف Excel"
               style={{
                 padding: '10px',
                 border: '2px dashed #3498db',
