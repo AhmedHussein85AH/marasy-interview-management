@@ -25,6 +25,7 @@ const CandidatesPage: React.FC = () => {
     qualification: '',
     maritalStatus: 'أعزب' as const,
     securityCompany: '',
+    position: '',
     offerDate: '',
     offerResult: 'في انتظار' as const
   })
@@ -54,7 +55,7 @@ const CandidatesPage: React.FC = () => {
       return
     }
 
-    addCandidate(newCandidate)
+    addCandidate({...newCandidate, createdBy: currentUser?.name || 'Unknown'})
     setNewCandidate({
       name: '',
       nationalId: '',
@@ -63,6 +64,7 @@ const CandidatesPage: React.FC = () => {
       qualification: '',
       maritalStatus: 'أعزب',
       securityCompany: '',
+      position: '',
       offerDate: '',
       offerResult: 'في انتظار'
     })
@@ -292,6 +294,19 @@ const CandidatesPage: React.FC = () => {
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  الوظيفة (اختياري)
+                </label>
+                <input
+                  type="text"
+                  value={newCandidate.position}
+                  onChange={(e) => setNewCandidate({...newCandidate, position: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+                  placeholder="أدخل المسمى الوظيفي"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
                   تاريخ العرض
                 </label>
                 <input
@@ -361,6 +376,9 @@ const CandidatesPage: React.FC = () => {
                   اسم الشركة
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الوظيفة
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
                   نتيجة العرض
                 </th>
                 {canUpdateStatus && (
@@ -407,6 +425,9 @@ const CandidatesPage: React.FC = () => {
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#3498db' }}>
                     {candidate.securityCompany}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.position || '-'}
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     <span style={{
