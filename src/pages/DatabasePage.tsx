@@ -729,6 +729,9 @@ const DatabasePage: React.FC = () => {
                   الوظيفة
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الوردية
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
                   النتيجة النهائية
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
@@ -794,6 +797,9 @@ const DatabasePage: React.FC = () => {
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     {candidate.position || '-'}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.workShift || '-'}
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     <span style={{

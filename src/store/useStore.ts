@@ -926,6 +926,7 @@ export const useStore = create<AppState>()(
             decisionDate: saved.decision_date,
             decisionBy: saved.decision_by,
             notes: saved.notes,
+            workShift: saved.work_shift,
             exclusionReason: saved.exclusion_reason,
             resignationReason: saved.resignation_reason,
             isRejectedBefore: saved.is_rejected_before,

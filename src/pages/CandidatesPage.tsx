@@ -80,14 +80,40 @@ const CandidatesPage: React.FC = () => {
   const handleStatusUpdate = (id: string, status: string, result: string) => {
     const candidate = candidates.find(c => c.id === id)
     if (candidate) {
-      updateCandidateStatus(id, status as any, result as any)
+      setSelectedCandidate(candidate)
+      setDecisionResult(result as 'مقبول' | 'مرفوض')
+      setDecisionNotes('')
+      setWorkShift('')
+      setShowDecisionModal(true)
+    }
+  }
+
+  const handleSubmitDecision = async () => {
+    if (!selectedCandidate || !decisionResult) return
+
+    try {
+      updateCandidateStatus(selectedCandidate.id, 
+        decisionResult === 'مقبول' ? 'تم التوظيف' : 'مرفوض', 
+        decisionResult as any)
       
-      // حفظ في قاعدة البيانات إذا كان القرار نهائي
-      if (result === 'مقبول' || result === 'مرفوض' || result === 'مستبعد') {
-        saveCandidateToDatabase(candidate, result as any)
+      if (decisionResult === 'مقبول' || decisionResult === 'مرفوض') {
+        await saveCandidateToDatabase(
+          selectedCandidate, 
+          decisionResult as any,
+          decisionNotes || undefined,
+          workShift as 'نهار' | 'ليل' || undefined
+        )
       }
       
       alert('تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح')
+      setShowDecisionModal(false)
+      setSelectedCandidate(null)
+      setDecisionResult('')
+      setDecisionNotes('')
+      setWorkShift('')
+    } catch (error) {
+      console.error('خطأ في حفظ القرار:', error)
+      alert('حدث خطأ في حفظ القرار')
     }
   }
 
@@ -528,6 +554,106 @@ const CandidatesPage: React.FC = () => {
               <strong>ملاحظة:</strong> أزرار الحذف متاحة فقط للمديرين (الأدمن). 
               نوع المستخدم الحالي: <strong>{currentUser?.userType}</strong>
             </p>
+          </div>
+        )}
+
+        {/* نافذة إدخال الملاحظات والوردية */}
+        {showDecisionModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              padding: '30px',
+              borderRadius: '10px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}>
+              <h3 style={{ margin: '0 0 20px 0', color: '#2c3e50' }}>
+                {decisionResult === 'مقبول' ? 'قبول المرشح' : 'رفض المرشح'}: {selectedCandidate?.name}
+              </h3>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  الملاحظات (اختياري)
+                </label>
+                <textarea
+                  value={decisionNotes}
+                  onChange={(e) => setDecisionNotes(e.target.value)}
+                  placeholder="اكتب ملاحظات حول القرار..."
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              {decisionResult === 'مقبول' && (
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                    الوردية (اختياري)
+                  </label>
+                  <select
+                    value={workShift}
+                    onChange={(e) => setWorkShift(e.target.value as 'نهار' | 'ليل')}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #ddd',
+                      borderRadius: '5px'
+                    }}
+                  >
+                    <option value="">اختر الوردية</option>
+                    <option value="نهار">نهار</option>
+                    <option value="ليل">ليل</option>
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowDecisionModal(false)}
+                  style={{
+                    backgroundColor: '#95a5a6',
+                    color: 'white',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleSubmitDecision}
+                  style={{
+                    backgroundColor: decisionResult === 'مقبول' ? '#2ecc71' : '#e74c3c',
+                    color: 'white',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  تأكيد
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
