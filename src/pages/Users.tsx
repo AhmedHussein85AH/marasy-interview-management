@@ -240,7 +240,7 @@ export default function Users() {
                   <div className="text-right">
                     <p className="text-sm font-medium">{user.department}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(user.createdAt).toLocaleDateString('ar-SA')}
+                      {new Date(user.createdAt).toLocaleDateString('en-US')}
                     </p>
                   </div>
                   {editingUser === user.id ? (
