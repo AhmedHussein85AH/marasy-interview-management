@@ -288,8 +288,8 @@ const DatabasePage: React.FC = () => {
   // وظيفة تصدير البيانات إلى Excel
   const exportToExcel = () => {
     const headers = [
-      'الاسم', 'الرقم القومي', 'المحافظة', 'المؤهل', 'اسم الشركة', 
-      'النتيجة النهائية', 'تاريخ القرار', 'قرار من', 'حالة سابقة', 'السبب'
+      'الاسم', 'الرقم القومي', 'المحافظة', 'المؤهل', 'اسم الشركة', 'الوظيفة',
+      'النتيجة النهائية', 'تاريخ القرار', 'قرار من', 'الملاحظات', 'حالة سابقة', 'السبب'
     ]
 
     const data = filteredCandidates.map(candidate => [
@@ -298,9 +298,11 @@ const DatabasePage: React.FC = () => {
       candidate.governorate,
       candidate.qualification,
       candidate.securityCompany,
+      candidate.position || '',
       candidate.finalResult,
       new Date(candidate.decisionDate).toLocaleDateString('en-GB'),
       candidate.decisionBy,
+      candidate.notes || '',
       candidate.isRejectedBefore ? 'مرفوض سابقاً' : 'جديد',
       candidate.exclusionReason ? `استبعاد: ${candidate.exclusionReason}` : 
       candidate.resignationReason ? `استقالة: ${candidate.resignationReason}` : 'لا يوجد'
@@ -422,6 +424,7 @@ const DatabasePage: React.FC = () => {
                 border: '1px solid #ddd',
                 borderRadius: '5px'
               }}
+              title="فلتر النتائج"
             >
               <option value="all">جميع النتائج</option>
               <option value="مقبول">مقبول</option>
@@ -438,6 +441,7 @@ const DatabasePage: React.FC = () => {
                 border: '1px solid #ddd',
                 borderRadius: '5px'
               }}
+              title="فلتر الشركة"
             >
               <option value="">جميع الشركات</option>
               {uniqueCompanies.map(company => (
@@ -701,6 +705,8 @@ const DatabasePage: React.FC = () => {
                       checked={selectedCandidates.length === filteredCandidates.length && filteredCandidates.length > 0}
                       onChange={handleSelectAll}
                       style={{ transform: 'scale(1.2)' }}
+                      aria-label="تحديد الكل"
+                      title="تحديد الكل"
                     />
                   </th>
                 )}
@@ -720,6 +726,9 @@ const DatabasePage: React.FC = () => {
                   اسم الشركة
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الوظيفة
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
                   النتيجة النهائية
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
@@ -727,6 +736,9 @@ const DatabasePage: React.FC = () => {
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
                   قرار من
+                </th>
+                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
+                  الملاحظات
                 </th>
                 <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
                   حالة سابقة
@@ -751,6 +763,8 @@ const DatabasePage: React.FC = () => {
                         checked={selectedCandidates.includes(candidate.id)}
                         onChange={() => handleSelectCandidate(candidate.id)}
                         style={{ transform: 'scale(1.2)' }}
+                        aria-label={`تحديد ${candidate.name}`}
+                        title={`تحديد ${candidate.name}`}
                       />
                     </td>
                   )}
@@ -779,6 +793,9 @@ const DatabasePage: React.FC = () => {
                     {candidate.securityCompany}
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.position || '-'}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
                     <span style={{
                       backgroundColor: getResultColor(candidate.finalResult),
                       color: 'white',
@@ -797,6 +814,9 @@ const DatabasePage: React.FC = () => {
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     {candidate.decisionBy}
+                  </td>
+                  <td style={{ padding: '15px', textAlign: 'center' }}>
+                    {candidate.notes || '-'}
                   </td>
                   <td style={{ padding: '15px', textAlign: 'center' }}>
                     {candidate.isRejectedBefore ? (

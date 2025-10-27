@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input'
 import { useStore, UserType } from '../store/useStore'
 import { useState } from 'react'
 
+
 export default function Users() {
   const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase } = useStore()
   const [isAddingUser, setIsAddingUser] = useState(false)
@@ -176,6 +177,7 @@ export default function Users() {
                   value={newUser.userType}
                   onChange={(e) => setNewUser({ ...newUser, userType: e.target.value as UserType })}
                   className="w-full p-2 border rounded-md"
+                  title="اختر الدور"
                 >
                   <option value="security_employee">موظف أمن</option>
                   <option value="interview_manager">مدير مقابلات</option>
@@ -247,6 +249,7 @@ export default function Users() {
                         value={user.userType}
                         onChange={(e) => handleUpdateRole(user.id, e.target.value as UserType)}
                         className="p-1 border rounded text-sm"
+                        title="تحديث الدور"
                       >
                         <option value="security_employee">موظف أمن</option>
                         <option value="interview_manager">مدير مقابلات</option>

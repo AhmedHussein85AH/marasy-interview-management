@@ -27,10 +27,12 @@ export interface Candidate {
   qualification: string
   maritalStatus: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
   securityCompany: string
+  position?: string
   offerDate: string
   offerResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
   status: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'
   createdBy: string
+  notes?: string
   createdAt: string
   updatedAt: string
   isRejectedBefore?: boolean
@@ -47,6 +49,7 @@ export interface SavedCandidate {
   qualification: string
   maritalStatus: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
   securityCompany: string
+  position?: string
   offerDate: string
   finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة'
   decisionDate: string
@@ -301,10 +304,12 @@ export const useStore = create<AppState>()(
             qualification: candidateData.qualification,
             marital_status: candidateData.maritalStatus,
             security_company: candidateData.securityCompany,
+            position: candidateData.position || null,
             offer_date: candidateData.offerDate,
             offer_result: candidateData.offerResult || 'في انتظار',
             status: 'جديد' as const,
             created_by: currentUser.name,
+            notes: candidateData.notes || null,
             is_rejected_before: !!rejectedBefore,
             previous_rejection_date: rejectedBefore?.decisionDate || null
           }
@@ -530,6 +535,7 @@ export const useStore = create<AppState>()(
               qualification: candidate.qualification,
               marital_status: candidate.maritalStatus,
               security_company: candidate.securityCompany,
+              position: candidate.position || null,
               offer_date: candidate.offerDate,
               final_result: finalResult,
               decision_date: new Date().toISOString(),
@@ -572,6 +578,7 @@ export const useStore = create<AppState>()(
               qualification: candidate.qualification,
               marital_status: candidate.maritalStatus,
               security_company: candidate.securityCompany,
+              position: candidate.position || null,
               offer_date: candidate.offerDate,
               final_result: finalResult,
               decision_date: new Date().toISOString(),
@@ -874,10 +881,12 @@ export const useStore = create<AppState>()(
             qualification: candidate.qualification,
             maritalStatus: candidate.marital_status,
             securityCompany: candidate.security_company,
+            position: candidate.position,
             offerDate: candidate.offer_date,
             offerResult: candidate.offer_result,
             status: candidate.status,
             createdBy: candidate.created_by,
+            notes: candidate.notes,
             isRejectedBefore: candidate.is_rejected_before,
             previousRejectionDate: candidate.previous_rejection_date,
             createdAt: candidate.created_at,
@@ -907,6 +916,7 @@ export const useStore = create<AppState>()(
             qualification: saved.qualification,
             maritalStatus: saved.marital_status,
             securityCompany: saved.security_company,
+            position: saved.position,
             offerDate: saved.offer_date,
             finalResult: saved.final_result,
             decisionDate: saved.decision_date,
@@ -1155,6 +1165,7 @@ export const useStore = create<AppState>()(
               qualification: candidateData.qualification,
               marital_status: candidateData.maritalStatus,
               security_company: candidateData.securityCompany,
+              position: candidateData.position || null,
               offer_date: candidateData.offerDate,
               final_result: candidateData.finalResult,
               decision_date: candidateData.decisionDate,

@@ -8,9 +8,10 @@ interface ExcelCandidate {
   الرقم_القومي: string
   تاريخ_الميلاد: string
   المحافظة: string
-  المؤهل: string
+  المؤ้วل: string
   الحالة_الاجتماعية: string
   اسم_الشركة: string
+  الوظيفة?: string
   تاريخ_العرض: string
   النتيجة_النهائية: string
   تاريخ_القرار: string
@@ -98,6 +99,7 @@ const BulkUploadPage: React.FC = () => {
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
       securityCompany: item.اسم_الشركة?.toString() || '',
+      position: item.الوظيفة?.toString() || undefined,
       offerDate: convertDateFormat(item.تاريخ_العرض?.toString() || ''),
       offerResult: (item.النتيجة_النهائية?.toString() || 'في انتظار') as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
     }))
@@ -112,6 +114,7 @@ const BulkUploadPage: React.FC = () => {
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
       securityCompany: item.اسم_الشركة?.toString() || '',
+      position: item.الوظيفة?.toString() || undefined,
       offerDate: convertDateFormat(item.تاريخ_العرض?.toString() || ''),
       finalResult: (item.النتيجة_النهائية?.toString() || 'مقبول') as 'مقبول' | 'مرفوض' | 'مستبعد',
       decisionDate: convertDateFormat(item.تاريخ_القرار?.toString() || '') || new Date().toISOString().split('T')[0],
@@ -256,7 +259,7 @@ const BulkUploadPage: React.FC = () => {
               <strong>الأعمدة المطلوبة:</strong> الاسم، الرقم_القومي، تاريخ_الميلاد، المحافظة، المؤهل، الحالة_الاجتماعية، اسم_الشركة
             </p>
             <p style={{ margin: '5px 0', fontSize: '14px' }}>
-              <strong>الأعمدة الاختيارية:</strong> تاريخ_العرض، النتيجة_النهائية، تاريخ_القرار، قرار_من، ملاحظات
+              <strong>الأعمدة الاختيارية:</strong> الوظيفة، تاريخ_العرض، النتيجة_النهائية، تاريخ_القرار، قرار_من، ملاحظات
             </p>
             <p style={{ margin: '5px 0', fontSize: '14px' }}>
               <strong>ملاحظة:</strong> يجب أن تكون الأعمدة في الصف الأول من الملف
