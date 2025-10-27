@@ -6,16 +6,16 @@ import * as XLSX from 'xlsx'
 interface ExcelCandidate {
   الاسم: string
   الرقم_القومي: string
-  تاريخ_الميلاد: string
+  تاريخ_الميلاد: string | number
   المحافظة: string
-  المؤ้วل: string
+  المؤهل: string
   الحالة_الاجتماعية: string
   اسم_الشركة: string
   الوظيفة?: string
-  تاريخ_العرض: string
-  النتيجة_النهائية: string
-  تاريخ_القرار: string
-  قرار_من: string
+  تاريخ_العرض?: string | number
+  النتيجة_النهائية?: string
+  تاريخ_القرار?: string | number
+  قرار_من?: string
   ملاحظات?: string
 }
 
@@ -74,10 +74,24 @@ const BulkUploadPage: React.FC = () => {
 
   // تحويل البيانات إلى التنسيق المطلوب
   // دالة لتحويل تنسيق التاريخ من DD-MM-YYYY إلى YYYY-MM-DD
-  const convertDateFormat = (dateString: string): string => {
-    if (!dateString) return ''
+  const convertDateFormat = (dateValue: string | number): string => {
+    if (!dateValue) return ''
     
-    // إذا كان التنسيق DD-MM-YYYY
+    // إذا كان التاريخ رقم (Excel serial date) - تحويله
+    if (typeof dateValue === 'number') {
+      // Excel serial date starts from Jan 1, 1900
+      const excelEpoch = new Date(1899, 11, 30)
+      const date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000)
+      
+      const day = date.getDate().toString().padStart(2, '0')
+      const month = (date.getMonth() + 1).toString().padStart(2, '0')
+      const year = date.getFullYear()
+      
+      return `${year}-${month}-${day}`
+    }
+    
+    // إذا كان التاريخ نصاً بصيغة DD-MM-YYYY
+    const dateString = dateValue.toString()
     const ddmmyyyyPattern = /^(\d{1,2})-(\d{1,2})-(\d{4})$/
     const match = dateString.match(ddmmyyyyPattern)
     
@@ -94,13 +108,13 @@ const BulkUploadPage: React.FC = () => {
     return data.map(item => ({
       name: item.الاسم?.toString() || '',
       nationalId: item.الرقم_القومي?.toString() || '',
-      birthDate: convertDateFormat(item.تاريخ_الميلاد?.toString() || ''),
+      birthDate: convertDateFormat(item.تاريخ_الميلاد),
       governorate: item.المحافظة?.toString() || '',
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
       securityCompany: item.اسم_الشركة?.toString() || '',
       position: item.الوظيفة?.toString() || undefined,
-      offerDate: convertDateFormat(item.تاريخ_العرض?.toString() || ''),
+      offerDate: convertDateFormat(item.تاريخ_العرض || ''),
       offerResult: (item.النتيجة_النهائية?.toString() || 'في انتظار') as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
     }))
   }
@@ -109,15 +123,15 @@ const BulkUploadPage: React.FC = () => {
     return data.map(item => ({
       name: item.الاسم?.toString() || '',
       nationalId: item.الرقم_القومي?.toString() || '',
-      birthDate: convertDateFormat(item.تاريخ_الميلاد?.toString() || ''),
+      birthDate: convertDateFormat(item.تاريخ_الميلاد),
       governorate: item.المحافظة?.toString() || '',
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
       securityCompany: item.اسم_الشركة?.toString() || '',
       position: item.الوظيفة?.toString() || undefined,
-      offerDate: convertDateFormat(item.تاريخ_العرض?.toString() || ''),
+      offerDate: convertDateFormat(item.تاريخ_العرض || ''),
       finalResult: (item.النتيجة_النهائية?.toString() || 'مقبول') as 'مقبول' | 'مرفوض' | 'مستبعد',
-      decisionDate: convertDateFormat(item.تاريخ_القرار?.toString() || '') || new Date().toISOString().split('T')[0],
+      decisionDate: convertDateFormat(item.تاريخ_القرار || '') || new Date().toISOString().split('T')[0],
       decisionBy: item.قرار_من?.toString() || currentUser?.name || 'مدير النظام',
       notes: item.ملاحظات?.toString() || undefined,
       isRejectedBefore: false,
