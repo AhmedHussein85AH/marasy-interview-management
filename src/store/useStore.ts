@@ -33,6 +33,7 @@ export interface Candidate {
   status: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'
   createdBy: string
   notes?: string
+  workShift?: 'نهار' | 'ليل'
   createdAt: string
   updatedAt: string
   isRejectedBefore?: boolean
@@ -55,6 +56,7 @@ export interface SavedCandidate {
   decisionDate: string
   decisionBy: string
   notes?: string
+  workShift?: 'نهار' | 'ليل'
   exclusionReason?: string
   resignationReason?: string
   isRejectedBefore: boolean
@@ -131,7 +133,7 @@ export interface AppState {
   addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void
   updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult']) => void
   deleteCandidate: (id: string) => void
-  saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة', notes?: string, exclusionReason?: string, resignationReason?: string) => Promise<void>
+  saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة', notes?: string, workShift?: 'نهار' | 'ليل', exclusionReason?: string, resignationReason?: string) => Promise<void>
   addInterview: (interview: Omit<Interview, 'id' | 'createdAt' | 'updatedAt'>) => void
   updateInterview: (id: string, updates: Partial<Interview>) => void
   deleteInterview: (id: string) => void
@@ -515,7 +517,7 @@ export const useStore = create<AppState>()(
       },
 
       // حفظ مرشح في قاعدة البيانات
-      saveCandidateToDatabase: async (candidate, finalResult, notes, exclusionReason?, resignationReason?) => {
+      saveCandidateToDatabase: async (candidate, finalResult, notes, workShift?, exclusionReason?, resignationReason?) => {
         const { currentUser, savedCandidates } = get()
         if (!currentUser) return
 
@@ -541,6 +543,7 @@ export const useStore = create<AppState>()(
               decision_date: new Date().toISOString(),
               decision_by: currentUser.name,
               notes: notes || null,
+              work_shift: workShift || null,
               exclusion_reason: exclusionReason || null,
               resignation_reason: resignationReason || null,
               is_rejected_before: candidate.isRejectedBefore || false,
@@ -584,6 +587,7 @@ export const useStore = create<AppState>()(
               decision_date: new Date().toISOString(),
               decision_by: currentUser.name,
               notes: notes || null,
+              work_shift: workShift || null,
               exclusion_reason: exclusionReason || null,
               resignation_reason: resignationReason || null,
               is_rejected_before: candidate.isRejectedBefore || false,

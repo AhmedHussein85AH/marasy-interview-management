@@ -17,6 +17,11 @@ const CandidatesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCompany, setFilterCompany] = useState('')
   const [filteredCandidates, setFilteredCandidates] = useState(candidates)
+  const [showDecisionModal, setShowDecisionModal] = useState(false)
+  const [selectedCandidate, setSelectedCandidate] = useState<any>(null)
+  const [decisionResult, setDecisionResult] = useState<'مقبول' | 'مرفوض' | ''>('')
+  const [decisionNotes, setDecisionNotes] = useState('')
+  const [workShift, setWorkShift] = useState<'نهار' | 'ليل' | ''>('')
   const [newCandidate, setNewCandidate] = useState({
     name: '',
     nationalId: '',
