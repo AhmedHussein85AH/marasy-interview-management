@@ -563,10 +563,33 @@ export const useStore = create<AppState>()(
               throw error
             }
 
-            // تحديث الحالة المحلية
+            // تحديث الحالة المحلية - تحويل من snake_case إلى camelCase
+            const transformedData: SavedCandidate = {
+              id: data.id,
+              name: data.name,
+              nationalId: data.national_id,
+              birthDate: data.birth_date,
+              governorate: data.governorate,
+              qualification: data.qualification,
+              maritalStatus: data.marital_status,
+              securityCompany: data.security_company,
+              position: data.position,
+              offerDate: data.offer_date,
+              finalResult: data.final_result,
+              decisionDate: data.decision_date,
+              decisionBy: data.decision_by,
+              notes: data.notes,
+              workShift: data.work_shift,
+              exclusionReason: data.exclusion_reason,
+              resignationReason: data.resignation_reason,
+              isRejectedBefore: data.is_rejected_before,
+              previousRejectionDate: data.previous_rejection_date,
+              createdAt: data.created_at
+            }
+            
             set(state => ({
               savedCandidates: state.savedCandidates.map(saved =>
-                saved.id === existingCandidate.id ? data : saved
+                saved.id === existingCandidate.id ? transformedData : saved
               )
             }))
 
@@ -606,9 +629,32 @@ export const useStore = create<AppState>()(
               throw error
             }
 
-            // تحديث الحالة المحلية
+            // تحديث الحالة المحلية - تحويل من snake_case إلى camelCase
+            const transformedData: SavedCandidate = {
+              id: data.id,
+              name: data.name,
+              nationalId: data.national_id,
+              birthDate: data.birth_date,
+              governorate: data.governorate,
+              qualification: data.qualification,
+              maritalStatus: data.marital_status,
+              securityCompany: data.security_company,
+              position: data.position,
+              offerDate: data.offer_date,
+              finalResult: data.final_result,
+              decisionDate: data.decision_date,
+              decisionBy: data.decision_by,
+              notes: data.notes,
+              workShift: data.work_shift,
+              exclusionReason: data.exclusion_reason,
+              resignationReason: data.resignation_reason,
+              isRejectedBefore: data.is_rejected_before,
+              previousRejectionDate: data.previous_rejection_date,
+              createdAt: data.created_at
+            }
+            
             set(state => ({
-              savedCandidates: [...state.savedCandidates, data]
+              savedCandidates: [...state.savedCandidates, transformedData]
             }))
 
             console.log('تم إنشاء سجل جديد للمرشح')
@@ -1176,6 +1222,9 @@ export const useStore = create<AppState>()(
               decision_date: candidateData.decisionDate,
               decision_by: candidateData.decisionBy,
               notes: candidateData.notes || null,
+              work_shift: candidateData.workShift || null,
+              exclusion_reason: candidateData.exclusionReason || null,
+              resignation_reason: candidateData.resignationReason || null,
               is_rejected_before: candidateData.isRejectedBefore,
               previous_rejection_date: candidateData.previousRejectionDate || null
             }])
@@ -1188,9 +1237,32 @@ export const useStore = create<AppState>()(
             continue
           }
 
-          // تحديث الحالة المحلية
+          // تحديث الحالة المحلية - تحويل من snake_case إلى camelCase
+          const transformedData: SavedCandidate = {
+            id: data.id,
+            name: data.name,
+            nationalId: data.national_id,
+            birthDate: data.birth_date,
+            governorate: data.governorate,
+            qualification: data.qualification,
+            maritalStatus: data.marital_status,
+            securityCompany: data.security_company,
+            position: data.position,
+            offerDate: data.offer_date,
+            finalResult: data.final_result,
+            decisionDate: data.decision_date,
+            decisionBy: data.decision_by,
+            notes: data.notes,
+            workShift: data.work_shift,
+            exclusionReason: data.exclusion_reason,
+            resignationReason: data.resignation_reason,
+            isRejectedBefore: data.is_rejected_before,
+            previousRejectionDate: data.previous_rejection_date,
+            createdAt: data.created_at
+          }
+          
           set(state => ({
-            savedCandidates: [...state.savedCandidates, data]
+            savedCandidates: [...state.savedCandidates, transformedData]
           }))
 
           successCount++

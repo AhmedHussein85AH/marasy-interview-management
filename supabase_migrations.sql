@@ -13,9 +13,10 @@ ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE saved_candidates 
 ADD COLUMN IF NOT EXISTS position TEXT;
 
+-- إضافة حقل الملاحظات إلى جدول المرشحين المحفوظين إذا لم تكن موجودة
+ALTER TABLE saved_candidates 
+ADD COLUMN IF NOT EXISTS notes TEXT;
+
 -- إضافة حقل الوردية (نظام العمل) إلى جدول المرشحين المحفوظين
 ALTER TABLE saved_candidates 
 ADD COLUMN IF NOT EXISTS work_shift TEXT CHECK (work_shift IN ('نهار', 'ليل'));
-
--- الملاحظات موجودة بالفعل في جدول saved_candidates
--- لذلك لا نحتاج لإضافتها
