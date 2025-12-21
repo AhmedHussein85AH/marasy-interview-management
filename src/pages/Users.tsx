@@ -9,7 +9,7 @@ import { useState } from 'react'
 
 
 export default function Users() {
-  const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase } = useStore()
+  const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase, deleteUserFromSupabase } = useStore()
   const [isAddingUser, setIsAddingUser] = useState(false)
   const [editingUser, setEditingUser] = useState<string | null>(null)
   const [newUser, setNewUser] = useState({
@@ -20,6 +20,7 @@ export default function Users() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -68,6 +69,25 @@ export default function Users() {
       setError('فشل في تحديث الدور')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`هل أنت متأكد من حذف المستخدم "${userName}"؟\n\nهذا الإجراء لا يمكن التراجع عنه.`)) {
+      return
+    }
+
+    setDeletingUserId(userId)
+    setError('')
+    
+    try {
+      await deleteUserFromSupabase(userId)
+      alert('تم حذف المستخدم بنجاح')
+    } catch (err: any) {
+      setError(err.message || 'فشل في حذف المستخدم')
+      alert(err.message || 'فشل في حذف المستخدم')
+    } finally {
+      setDeletingUserId(null)
     }
   }
 
@@ -265,13 +285,30 @@ export default function Users() {
                         {getRoleLabel(user.userType)}
                       </Badge>
                       {canManageUsers && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setEditingUser(user.id)}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingUser(user.id)}
+                            disabled={loading || deletingUserId === user.id}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          {currentUser?.id !== user.id && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteUser(user.id, user.name)}
+                              disabled={loading || deletingUserId === user.id}
+                            >
+                              {deletingUserId === user.id ? (
+                                'جاري الحذف...'
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   )}

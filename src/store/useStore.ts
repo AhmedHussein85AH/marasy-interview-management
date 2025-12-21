@@ -161,6 +161,7 @@ export interface AppState {
   loadUsersFromSupabase: () => Promise<void>
   addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
   updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
+  deleteUserFromSupabase: (id: string) => Promise<void>
   // إعداد الاشتراكات التلقائية
   setupRealtimeSubscriptions: () => void
   cleanupRealtimeSubscriptions: () => void
@@ -1301,6 +1302,42 @@ export const useStore = create<AppState>()(
             u.id === id ? { ...u, userType } : u
           ) 
         }))
+      },
+
+      // حذف مستخدم من Supabase
+      deleteUserFromSupabase: async (id) => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') {
+          throw new Error('غير مصرح لك بحذف المستخدمين')
+        }
+
+        // منع حذف المستخدم الحالي
+        if (currentUser.id === id) {
+          throw new Error('لا يمكنك حذف حسابك الخاص')
+        }
+
+        try {
+          // حذف من Supabase
+          const { error } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', id)
+
+          if (error) {
+            console.error('خطأ في حذف المستخدم:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            users: state.users.filter(u => u.id !== id)
+          }))
+
+          console.log('تم حذف المستخدم بنجاح')
+        } catch (error) {
+          console.error('خطأ في حذف المستخدم:', error)
+          throw error
+        }
       },
 
   // إضافة عدة مرشحين من ملف Excel

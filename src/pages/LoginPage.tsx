@@ -56,9 +56,21 @@ const LoginPage: React.FC = () => {
         await loginWithSupabase(email)
         return
       }
-      // فشل Supabase → نرجع للوضع التجريبي الحالي
-    } catch (err) {
-      // نتجاهل ونستخدم المسار التجريبي
+      
+      // إذا كان هناك خطأ من Supabase، عرض رسالة واضحة
+      if (error) {
+        if (error.message.includes('Invalid login credentials') || error.message.includes('Email not confirmed')) {
+          setError('البريد الإلكتروني أو كلمة المرور غير صحيحة. يرجى التحقق من بياناتك أو التواصل مع المدير.')
+        } else {
+          setError(`خطأ في تسجيل الدخول: ${error.message}`)
+        }
+        return
+      }
+    } catch (err: any) {
+      // في حالة وجود خطأ في الاتصال
+      console.error('خطأ في الاتصال بـ Supabase:', err)
+      setError('خطأ في الاتصال. يرجى المحاولة مرة أخرى أو التواصل مع المدير.')
+      return
     }
 
     // مسار تجريبي احتياطي (معطل في الإنتاج)
@@ -66,7 +78,7 @@ const LoginPage: React.FC = () => {
     const allowDemoLogin = import.meta.env.VITE_ALLOW_DEMO_LOGIN === 'true'
     
     if (isProduction && !allowDemoLogin) {
-      setError('تسجيل الدخول التجريبي معطل في الإنتاج')
+      setError('تسجيل الدخول التجريبي معطل في الإنتاج. يرجى استخدام حساب Supabase أو التواصل مع المدير.')
       return
     }
     const passwords: { [key: string]: string } = {
