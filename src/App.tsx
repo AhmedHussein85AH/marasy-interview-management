@@ -14,12 +14,17 @@ import Users from './pages/Users'
 import BulkUploadPage from './pages/BulkUploadPage'
 
 const App: React.FC = () => {
-  const { currentUser, initializeDemoData, isInitialized } = useStore()
+  const { currentUser, initializeDemoData, cleanupRealtimeSubscriptions } = useStore()
 
   useEffect(() => {
     // تهيئة البيانات التجريبية دائماً عند بدء التطبيق
     initializeDemoData()
-  }, [initializeDemoData])
+    
+    // تنظيف الاشتراكات عند إلغاء التثبيت
+    return () => {
+      cleanupRealtimeSubscriptions()
+    }
+  }, [initializeDemoData, cleanupRealtimeSubscriptions])
 
   // إذا لم يكن هناك مستخدم مسجل دخول، عرض صفحة تسجيل الدخول
   if (!currentUser) {
@@ -60,7 +65,7 @@ const App: React.FC = () => {
             </ProtectedLayout>
           } />
           <Route path="/database" element={
-            <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
+            <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
               <DatabasePage />
             </ProtectedLayout>
           } />

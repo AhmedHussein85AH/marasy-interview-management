@@ -131,7 +131,7 @@ export interface AppState {
   // New: login via Supabase and set current user directly
   loginWithSupabase: (email: string) => Promise<boolean>
   addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void
-  updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult']) => void
+  updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult'], notes?: string, workShift?: 'نهار' | 'ليل') => void
   deleteCandidate: (id: string) => void
   saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة', notes?: string, workShift?: 'نهار' | 'ليل', exclusionReason?: string, resignationReason?: string) => Promise<void>
   addInterview: (interview: Omit<Interview, 'id' | 'createdAt' | 'updatedAt'>) => void
@@ -155,12 +155,22 @@ export interface AppState {
   saveUserSession: (user: User) => void
   bulkAddCandidates: (candidates: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => Promise<{ success: number; failed: number; errors: string[] }>
   bulkAddSavedCandidates: (candidates: Omit<SavedCandidate, 'id' | 'createdAt'>[]) => Promise<{ success: number; failed: number; errors: string[] }>
+  loadDataFromSupabase: () => Promise<void>
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
   // إدارة المستخدمين من Supabase
   loadUsersFromSupabase: () => Promise<void>
   addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
   updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
+  // إعداد الاشتراكات التلقائية
+  setupRealtimeSubscriptions: () => void
+  cleanupRealtimeSubscriptions: () => void
   }
+
+// متغيرات لتخزين الاشتراكات
+let candidatesSubscription: any = null
+let savedCandidatesSubscription: any = null
+let interviewsSubscription: any = null
+let notificationsSubscription: any = null
 
 // إنشاء المتجر - بدون تخزين محلي
 export const useStore = create<AppState>()(
@@ -230,6 +240,8 @@ export const useStore = create<AppState>()(
 
       // تسجيل الخروج
       logout: () => {
+        // تنظيف الاشتراكات قبل تسجيل الخروج
+        get().cleanupRealtimeSubscriptions()
         set({ currentUser: null })
         // حذف الجلسة من localStorage
         localStorage.removeItem('currentUser')
@@ -293,10 +305,72 @@ export const useStore = create<AppState>()(
         if (!currentUser) return
 
         try {
+          // فحص التكرار من قاعدة البيانات أولاً
+          const { data: existingInDB } = await supabase
+            .from('candidates')
+            .select('id, national_id')
+            .eq('national_id', candidateData.nationalId)
+            .maybeSingle()
+
+          if (existingInDB) {
+            throw new Error(`المرشح برقم قومي ${candidateData.nationalId} موجود مسبقاً في قاعدة البيانات`)
+          }
+
           // فحص إذا كان المرشح مرفوض من قبل
           const rejectedBefore = savedCandidates.find(
             saved => saved.nationalId === candidateData.nationalId && saved.finalResult === 'مرفوض'
           )
+          
+          // فحص أيضاً من قاعدة البيانات
+          if (!rejectedBefore) {
+            const { data: rejectedInDB } = await supabase
+              .from('saved_candidates')
+              .select('decision_date')
+              .eq('national_id', candidateData.nationalId)
+              .eq('final_result', 'مرفوض')
+              .maybeSingle()
+            
+            if (rejectedInDB) {
+              // إعادة تحميل savedCandidates من قاعدة البيانات
+              const { data: savedData } = await supabase
+                .from('saved_candidates')
+                .select('*')
+                .eq('national_id', candidateData.nationalId)
+                .eq('final_result', 'مرفوض')
+                .single()
+              
+              if (savedData) {
+                const transformed: SavedCandidate = {
+                  id: savedData.id,
+                  name: savedData.name,
+                  nationalId: savedData.national_id,
+                  birthDate: savedData.birth_date,
+                  governorate: savedData.governorate,
+                  qualification: savedData.qualification,
+                  maritalStatus: savedData.marital_status,
+                  securityCompany: savedData.security_company,
+                  position: savedData.position,
+                  offerDate: savedData.offer_date,
+                  finalResult: savedData.final_result,
+                  decisionDate: savedData.decision_date,
+                  decisionBy: savedData.decision_by,
+                  notes: savedData.notes,
+                  workShift: savedData.work_shift,
+                  exclusionReason: savedData.exclusion_reason,
+                  resignationReason: savedData.resignation_reason,
+                  isRejectedBefore: savedData.is_rejected_before,
+                  previousRejectionDate: savedData.previous_rejection_date,
+                  createdAt: savedData.created_at
+                }
+                // تحديث الحالة المحلية
+                set(state => ({
+                  savedCandidates: state.savedCandidates.some(s => s.id === transformed.id)
+                    ? state.savedCandidates
+                    : [...state.savedCandidates, transformed]
+                }))
+              }
+            }
+          }
 
           const newCandidate = {
             name: candidateData.name,
@@ -348,12 +422,38 @@ export const useStore = create<AppState>()(
               .insert([notification])
           }
 
+          // تحويل البيانات من snake_case إلى camelCase
+          const transformedCandidate: Candidate = {
+            id: data.id,
+            name: data.name,
+            nationalId: data.national_id,
+            birthDate: data.birth_date,
+            governorate: data.governorate,
+            qualification: data.qualification,
+            maritalStatus: data.marital_status,
+            securityCompany: data.security_company,
+            position: data.position,
+            offerDate: data.offer_date,
+            offerResult: data.offer_result,
+            status: data.status,
+            createdBy: data.created_by,
+            notes: data.notes,
+            isRejectedBefore: data.is_rejected_before,
+            previousRejectionDate: data.previous_rejection_date,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at
+          }
+
           // تحديث الحالة المحلية
           set(state => ({
-            candidates: [...state.candidates, data],
+            candidates: state.candidates.some(c => c.id === transformedCandidate.id)
+              ? state.candidates.map(c => c.id === transformedCandidate.id ? transformedCandidate : c)
+              : [...state.candidates, transformedCandidate],
             stats: {
               ...state.stats,
-              totalCandidates: state.stats.totalCandidates + 1
+              totalCandidates: state.candidates.some(c => c.id === transformedCandidate.id)
+                ? state.stats.totalCandidates
+                : state.stats.totalCandidates + 1
             }
           }))
 
@@ -365,19 +465,31 @@ export const useStore = create<AppState>()(
       },
 
       // تحديث حالة المرشح
-      updateCandidateStatus: async (id, status, offerResult) => {
+      updateCandidateStatus: async (id, status, offerResult, notes?, workShift?) => {
         const { currentUser } = get()
         if (!currentUser || currentUser.userType === 'security_employee') return
 
         try {
-          // تحديث في Supabase
+          // تحديث في Supabase - تحديث notes و workShift أيضاً
+          const updateData: any = {
+            status,
+            offer_result: offerResult,
+            updated_at: new Date().toISOString()
+          }
+
+          // إضافة الملاحظات إذا كانت موجودة
+          if (notes !== undefined) {
+            updateData.notes = notes || null
+          }
+
+          // إضافة الوردية إذا كانت موجودة
+          if (workShift !== undefined) {
+            updateData.work_shift = workShift || null
+          }
+
           const { error } = await supabase
             .from('candidates')
-            .update({
-              status,
-              offer_result: offerResult,
-              updated_at: new Date().toISOString()
-            })
+            .update(updateData)
             .eq('id', id)
 
           if (error) {
@@ -389,7 +501,14 @@ export const useStore = create<AppState>()(
           set(state => ({
             candidates: state.candidates.map(candidate =>
               candidate.id === id
-                ? { ...candidate, status, offerResult, updatedAt: new Date().toISOString() }
+                ? { 
+                    ...candidate, 
+                    status, 
+                    offerResult, 
+                    notes: notes !== undefined ? notes : candidate.notes,
+                    workShift: workShift !== undefined ? workShift : candidate.workShift,
+                    updatedAt: new Date().toISOString() 
+                  }
                 : candidate
             )
           }))
@@ -398,7 +517,12 @@ export const useStore = create<AppState>()(
           if (offerResult && ['مقبول', 'مرفوض', 'مستبعد'].includes(offerResult)) {
             const candidate = get().candidates.find(c => c.id === id)
             if (candidate) {
-              await get().saveCandidateToDatabase(candidate, offerResult as 'مقبول' | 'مرفوض' | 'مستبعد')
+              await get().saveCandidateToDatabase(
+                candidate, 
+                offerResult as 'مقبول' | 'مرفوض' | 'مستبعد',
+                notes,
+                workShift
+              )
             }
           }
         } catch (error) {
@@ -522,12 +646,24 @@ export const useStore = create<AppState>()(
         if (!currentUser) return
 
         try {
-          // فحص إذا كان المرشح محفوظ مسبقاً بنفس الرقم القومي
-          const existingCandidate = savedCandidates.find(
+          // فحص التكرار من قاعدة البيانات أولاً
+          const { data: existingInDB } = await supabase
+            .from('saved_candidates')
+            .select('*')
+            .eq('national_id', candidate.nationalId)
+            .maybeSingle()
+
+          // فحص إذا كان المرشح محفوظ مسبقاً بنفس الرقم القومي (من الحالة المحلية أو قاعدة البيانات)
+          const existingCandidate = existingInDB ? {
+            id: existingInDB.id,
+            nationalId: existingInDB.national_id,
+            // ... باقي البيانات
+          } : savedCandidates.find(
             saved => saved.nationalId === candidate.nationalId
           )
 
-          if (existingCandidate) {
+          if (existingCandidate || existingInDB) {
+            const existingId = existingInDB?.id || existingCandidate?.id
             // تحديث السجل الموجود بدلاً من إنشاء سجل جديد
             const updatedCandidate = {
               name: candidate.name,
@@ -554,7 +690,7 @@ export const useStore = create<AppState>()(
             const { data, error } = await supabase
               .from('saved_candidates')
               .update(updatedCandidate)
-              .eq('id', existingCandidate.id)
+              .eq('id', existingId)
               .select()
               .single()
 
@@ -588,9 +724,11 @@ export const useStore = create<AppState>()(
             }
             
             set(state => ({
-              savedCandidates: state.savedCandidates.map(saved =>
-                saved.id === existingCandidate.id ? transformedData : saved
-              )
+              savedCandidates: state.savedCandidates.some(s => s.id === transformedData.id)
+                ? state.savedCandidates.map(saved =>
+                    saved.id === transformedData.id ? transformedData : saved
+                  )
+                : [...state.savedCandidates, transformedData]
             }))
 
             console.log('تم تحديث المرشح الموجود بدلاً من إنشاء سجل جديد')
@@ -937,6 +1075,7 @@ export const useStore = create<AppState>()(
             status: candidate.status,
             createdBy: candidate.created_by,
             notes: candidate.notes,
+            workShift: candidate.work_shift as 'نهار' | 'ليل' | undefined,
             isRejectedBefore: candidate.is_rejected_before,
             previousRejectionDate: candidate.previous_rejection_date,
             createdAt: candidate.created_at,
@@ -993,6 +1132,24 @@ export const useStore = create<AppState>()(
         } catch (error) {
           console.error('خطأ في تحميل البيانات:', error)
         }
+      },
+
+      // إعادة تعيين البيانات
+      resetData: () => {
+        set({
+          candidates: [],
+          savedCandidates: [],
+          notifications: [],
+          interviews: [],
+          stats: {
+            totalCandidates: 0,
+            pendingInterviews: 0,
+            completedInterviews: 0,
+            hiredCandidates: 0,
+            rejectedCandidates: 0
+          }
+        })
+        console.log('تم إعادة تعيين البيانات')
       },
 
       // استعادة حالة المستخدم من localStorage
@@ -1071,6 +1228,9 @@ export const useStore = create<AppState>()(
         // تحميل البيانات من Supabase
         await get().loadDataFromSupabase()
         await get().loadUsersFromSupabase()
+
+        // إعداد الاشتراكات التلقائية
+        get().setupRealtimeSubscriptions()
 
         console.log('تم تهيئة البيانات التجريبية بنجاح')
         console.log('المستخدمون المتاحون:', demoUsers.map(u => u.email))
@@ -1155,12 +1315,19 @@ export const useStore = create<AppState>()(
     try {
       for (const candidateData of candidates) {
         try {
-          // فحص إذا كان المرشح موجود مسبقاً
+          // فحص التكرار من قاعدة البيانات أولاً
+          const { data: existingInDB } = await supabase
+            .from('candidates')
+            .select('id, national_id')
+            .eq('national_id', candidateData.nationalId)
+            .maybeSingle()
+
+          // فحص أيضاً من الحالة المحلية
           const existingCandidate = get().candidates.find(
             c => c.nationalId === candidateData.nationalId
           )
 
-          if (existingCandidate) {
+          if (existingCandidate || existingInDB) {
             errors.push(`المرشح ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً`)
             failedCount++
             continue
@@ -1194,12 +1361,19 @@ export const useStore = create<AppState>()(
     try {
       for (const candidateData of candidates) {
         try {
-          // فحص إذا كان المرشح موجود مسبقاً
+          // فحص التكرار من قاعدة البيانات أولاً
+          const { data: existingInDB } = await supabase
+            .from('saved_candidates')
+            .select('id, national_id')
+            .eq('national_id', candidateData.nationalId)
+            .maybeSingle()
+
+          // فحص أيضاً من الحالة المحلية
           const existingCandidate = get().savedCandidates.find(
             c => c.nationalId === candidateData.nationalId
           )
 
-          if (existingCandidate) {
+          if (existingCandidate || existingInDB) {
             errors.push(`المرشح المحفوظ ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً`)
             failedCount++
             continue
@@ -1278,6 +1452,95 @@ export const useStore = create<AppState>()(
       throw error
     }
   },
+
+      // إعداد الاشتراكات التلقائية من Supabase
+      setupRealtimeSubscriptions: () => {
+        console.log('🔔 إعداد الاشتراكات التلقائية...')
+        
+        // تنظيف الاشتراكات السابقة
+        get().cleanupRealtimeSubscriptions()
+
+        // اشتراك في تحديثات المرشحين
+        candidatesSubscription = supabase
+          .channel('candidates_changes')
+          .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'candidates' },
+            async (payload) => {
+              console.log('📊 تحديث في المرشحين:', payload.eventType)
+              // إعادة تحميل البيانات من Supabase
+              await get().loadDataFromSupabase()
+            }
+          )
+          .subscribe()
+
+        // اشتراك في تحديثات المرشحين المحفوظين
+        savedCandidatesSubscription = supabase
+          .channel('saved_candidates_changes')
+          .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'saved_candidates' },
+            async (payload) => {
+              console.log('💾 تحديث في المرشحين المحفوظين:', payload.eventType)
+              // إعادة تحميل البيانات من Supabase
+              await get().loadDataFromSupabase()
+            }
+          )
+          .subscribe()
+
+        // اشتراك في تحديثات المقابلات
+        interviewsSubscription = supabase
+          .channel('interviews_changes')
+          .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'interviews' },
+            async (payload) => {
+              console.log('📅 تحديث في المقابلات:', payload.eventType)
+              // إعادة تحميل البيانات من Supabase
+              await get().loadDataFromSupabase()
+            }
+          )
+          .subscribe()
+
+        // اشتراك في تحديثات الإشعارات
+        notificationsSubscription = supabase
+          .channel('notifications_changes')
+          .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'notifications' },
+            async (payload) => {
+              console.log('🔔 تحديث في الإشعارات:', payload.eventType)
+              // إعادة تحميل البيانات من Supabase
+              await get().loadDataFromSupabase()
+            }
+          )
+          .subscribe()
+
+        console.log('✅ تم إعداد الاشتراكات التلقائية بنجاح')
+      },
+
+      // تنظيف الاشتراكات
+      cleanupRealtimeSubscriptions: () => {
+        console.log('🧹 تنظيف الاشتراكات...')
+        
+        if (candidatesSubscription) {
+          supabase.removeChannel(candidatesSubscription)
+          candidatesSubscription = null
+        }
+        
+        if (savedCandidatesSubscription) {
+          supabase.removeChannel(savedCandidatesSubscription)
+          savedCandidatesSubscription = null
+        }
+        
+        if (interviewsSubscription) {
+          supabase.removeChannel(interviewsSubscription)
+          interviewsSubscription = null
+        }
+        
+        if (notificationsSubscription) {
+          supabase.removeChannel(notificationsSubscription)
+          notificationsSubscription = null
+        }
+        
+        console.log('✅ تم تنظيف الاشتراكات')
+      },
 
       // إضافة وظيفة set للوصول المباشر
       set: set

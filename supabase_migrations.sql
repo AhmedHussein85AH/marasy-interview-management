@@ -20,3 +20,7 @@ ADD COLUMN IF NOT EXISTS notes TEXT;
 -- إضافة حقل الوردية (نظام العمل) إلى جدول المرشحين المحفوظين
 ALTER TABLE saved_candidates 
 ADD COLUMN IF NOT EXISTS work_shift TEXT CHECK (work_shift IN ('نهار', 'ليل'));
+
+-- إضافة حقل الوردية (نظام العمل) إلى جدول المرشحين
+ALTER TABLE candidates 
+ADD COLUMN IF NOT EXISTS work_shift TEXT CHECK (work_shift IN ('نهار', 'ليل'));

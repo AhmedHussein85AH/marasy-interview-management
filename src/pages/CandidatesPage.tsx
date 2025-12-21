@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
+import { GOVERNORATES, SECURITY_COMPANIES, POSITIONS } from '../constants/lists'
 
 const CandidatesPage: React.FC = () => {
   const { 
@@ -92,17 +93,27 @@ const CandidatesPage: React.FC = () => {
     if (!selectedCandidate || !decisionResult) return
 
     try {
-      updateCandidateStatus(selectedCandidate.id, 
+      // تحديث حالة المرشح مع الملاحظات والوردية
+      await updateCandidateStatus(
+        selectedCandidate.id, 
         decisionResult === 'مقبول' ? 'تم التوظيف' : 'مرفوض', 
-        decisionResult as any)
+        decisionResult as any,
+        decisionNotes || undefined,
+        workShift as 'نهار' | 'ليل' || undefined
+      )
       
+      // حفظ في قاعدة البيانات المحفوظة إذا كان القرار نهائي
       if (decisionResult === 'مقبول' || decisionResult === 'مرفوض') {
-        await saveCandidateToDatabase(
-          selectedCandidate, 
-          decisionResult as any,
-          decisionNotes || undefined,
-          workShift as 'نهار' | 'ليل' || undefined
-        )
+        // الحصول على المرشح المحدث
+        const updatedCandidate = candidates.find(c => c.id === selectedCandidate.id)
+        if (updatedCandidate) {
+          await saveCandidateToDatabase(
+            updatedCandidate, 
+            decisionResult as any,
+            decisionNotes || undefined,
+            workShift as 'نهار' | 'ليل' || undefined
+          )
+        }
       }
       
       alert('تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح')
@@ -272,13 +283,18 @@ const CandidatesPage: React.FC = () => {
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
                   المحافظة *
                 </label>
-                <input
-                  type="text"
+                <select
                   value={newCandidate.governorate}
                   onChange={(e) => setNewCandidate({...newCandidate, governorate: e.target.value})}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  placeholder="أدخل المحافظة"
-                />
+                  title="اختر المحافظة"
+                  required
+                >
+                  <option value="">اختر المحافظة</option>
+                  {GOVERNORATES.map((gov) => (
+                    <option key={gov} value={gov}>{gov}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -314,26 +330,34 @@ const CandidatesPage: React.FC = () => {
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
                   شركة الأمن
                 </label>
-                <input
-                  type="text"
+                <select
                   value={newCandidate.securityCompany}
                   onChange={(e) => setNewCandidate({...newCandidate, securityCompany: e.target.value})}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  placeholder="أدخل اسم شركة الأمن"
-                />
+                  title="اختر شركة الأمن"
+                >
+                  <option value="">اختر شركة الأمن</option>
+                  {SECURITY_COMPANIES.map((company) => (
+                    <option key={company} value={company}>{company}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
                   الوظيفة (اختياري)
                 </label>
-                <input
-                  type="text"
+                <select
                   value={newCandidate.position}
                   onChange={(e) => setNewCandidate({...newCandidate, position: e.target.value})}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  placeholder="أدخل المسمى الوظيفي"
-                />
+                  title="اختر الوظيفة"
+                >
+                  <option value="">اختر الوظيفة</option>
+                  {POSITIONS.map((position) => (
+                    <option key={position} value={position}>{position}</option>
+                  ))}
+                </select>
               </div>
 
               <div>

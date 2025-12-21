@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import * as XLSX from 'xlsx'
+import { GOVERNORATES, SECURITY_COMPANIES, POSITIONS } from '../constants/lists'
 
 interface ExcelCandidate {
   الاسم: string
@@ -104,18 +105,64 @@ const BulkUploadPage: React.FC = () => {
     return dateString
   }
 
+  // التحقق من صحة المحافظة
+  const validateGovernorate = (governorate: string): string => {
+    const gov = governorate?.toString().trim() || ''
+    if (!gov) return ''
+    
+    // البحث عن تطابق دقيق
+    const exactMatch = GOVERNORATES.find(g => g === gov)
+    if (exactMatch) return exactMatch
+    
+    // البحث عن تطابق غير حساس لحالة الأحرف
+    const caseInsensitiveMatch = GOVERNORATES.find(g => g.toLowerCase() === gov.toLowerCase())
+    if (caseInsensitiveMatch) return caseInsensitiveMatch
+    
+    // إذا لم يتم العثور على تطابق، إرجاع القيمة الأصلية (سيتم قبولها ولكن مع تحذير)
+    return gov
+  }
+
+  // التحقق من صحة شركة الأمن
+  const validateSecurityCompany = (company: string): string => {
+    const comp = company?.toString().trim() || ''
+    if (!comp) return ''
+    
+    const exactMatch = SECURITY_COMPANIES.find(c => c === comp)
+    if (exactMatch) return exactMatch
+    
+    const caseInsensitiveMatch = SECURITY_COMPANIES.find(c => c.toLowerCase() === comp.toLowerCase())
+    if (caseInsensitiveMatch) return caseInsensitiveMatch
+    
+    return comp
+  }
+
+  // التحقق من صحة الوظيفة
+  const validatePosition = (position: string): string | undefined => {
+    const pos = position?.toString().trim() || ''
+    if (!pos) return undefined
+    
+    const exactMatch = POSITIONS.find(p => p === pos)
+    if (exactMatch) return exactMatch
+    
+    const caseInsensitiveMatch = POSITIONS.find(p => p.toLowerCase() === pos.toLowerCase())
+    if (caseInsensitiveMatch) return caseInsensitiveMatch
+    
+    return pos
+  }
+
   const convertToCandidates = (data: ExcelCandidate[]) => {
     return data.map(item => ({
       name: item.الاسم?.toString() || '',
       nationalId: item.الرقم_القومي?.toString() || '',
       birthDate: convertDateFormat(item.تاريخ_الميلاد),
-      governorate: item.المحافظة?.toString() || '',
+      governorate: validateGovernorate(item.المحافظة?.toString() || ''),
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
-      securityCompany: item.اسم_الشركة?.toString() || '',
-      position: item.الوظيفة?.toString() || undefined,
+      securityCompany: validateSecurityCompany(item.اسم_الشركة?.toString() || ''),
+      position: validatePosition(item.الوظيفة?.toString() || ''),
       offerDate: convertDateFormat(item.تاريخ_العرض || ''),
-      offerResult: (item.النتيجة_النهائية?.toString() || 'في انتظار') as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
+      offerResult: (item.النتيجة_النهائية?.toString() || 'في انتظار') as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار',
+      createdBy: currentUser?.name || 'نظام'
     }))
   }
 
@@ -124,11 +171,11 @@ const BulkUploadPage: React.FC = () => {
       name: item.الاسم?.toString() || '',
       nationalId: item.الرقم_القومي?.toString() || '',
       birthDate: convertDateFormat(item.تاريخ_الميلاد),
-      governorate: item.المحافظة?.toString() || '',
+      governorate: validateGovernorate(item.المحافظة?.toString() || ''),
       qualification: item.المؤهل?.toString() || '',
       maritalStatus: (item.الحالة_الاجتماعية?.toString() || 'أعزب') as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
-      securityCompany: item.اسم_الشركة?.toString() || '',
-      position: item.الوظيفة?.toString() || undefined,
+      securityCompany: validateSecurityCompany(item.اسم_الشركة?.toString() || ''),
+      position: validatePosition(item.الوظيفة?.toString() || ''),
       offerDate: convertDateFormat(item.تاريخ_العرض || ''),
       finalResult: (item.النتيجة_النهائية?.toString() || 'مقبول') as 'مقبول' | 'مرفوض' | 'مستبعد',
       decisionDate: convertDateFormat(item.تاريخ_القرار || '') || new Date().toISOString().split('T')[0],
@@ -139,9 +186,43 @@ const BulkUploadPage: React.FC = () => {
     }))
   }
 
+  // التحقق من صحة البيانات قبل الرفع
+  const validateData = (data: ExcelCandidate[]): { valid: boolean; warnings: string[] } => {
+    const warnings: string[] = []
+    
+    data.forEach((item, index) => {
+      const governorate = item.المحافظة?.toString().trim() || ''
+      const company = item.اسم_الشركة?.toString().trim() || ''
+      const position = item.الوظيفة?.toString().trim() || ''
+      
+      if (governorate && !GOVERNORATES.some(g => g === governorate || g.toLowerCase() === governorate.toLowerCase())) {
+        warnings.push(`السطر ${index + 2}: المحافظة "${governorate}" غير موجودة في القائمة المعتمدة`)
+      }
+      
+      if (company && !SECURITY_COMPANIES.some(c => c === company || c.toLowerCase() === company.toLowerCase())) {
+        warnings.push(`السطر ${index + 2}: شركة الأمن "${company}" غير موجودة في القائمة المعتمدة`)
+      }
+      
+      if (position && !POSITIONS.some(p => p === position || p.toLowerCase() === position.toLowerCase())) {
+        warnings.push(`السطر ${index + 2}: الوظيفة "${position}" غير موجودة في القائمة المعتمدة`)
+      }
+    })
+    
+    return { valid: warnings.length === 0, warnings }
+  }
+
   // رفع البيانات
   const handleUpload = async () => {
     if (!file || previewData.length === 0) return
+
+    // التحقق من صحة البيانات أولاً
+    const validation = validateData(previewData)
+    if (validation.warnings.length > 0) {
+      const confirmMessage = `تم العثور على ${validation.warnings.length} تحذير:\n\n${validation.warnings.slice(0, 5).join('\n')}${validation.warnings.length > 5 ? '\n... والمزيد' : ''}\n\nهل تريد المتابعة على أي حال؟`
+      if (!window.confirm(confirmMessage)) {
+        return
+      }
+    }
 
     setIsUploading(true)
     try {
@@ -278,6 +359,25 @@ const BulkUploadPage: React.FC = () => {
             <p style={{ margin: '5px 0', fontSize: '14px' }}>
               <strong>ملاحظة:</strong> يجب أن تكون الأعمدة في الصف الأول من الملف
             </p>
+            <p style={{ margin: '5px 0', fontSize: '14px', color: '#e74c3c', fontWeight: 'bold' }}>
+              <strong>⚠️ مهم:</strong> يجب أن تكون قيم المحافظة وشركة الأمن والوظيفة مطابقة تماماً للقوائم المحددة في النظام
+            </p>
+            <details style={{ marginTop: '10px' }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#2980b9' }}>
+                عرض القوائم المعتمدة
+              </summary>
+              <div style={{ marginTop: '10px', padding: '10px', backgroundColor: 'white', borderRadius: '5px' }}>
+                <p style={{ margin: '5px 0', fontSize: '13px' }}>
+                  <strong>المحافظات:</strong> {GOVERNORATES.join('، ')}
+                </p>
+                <p style={{ margin: '5px 0', fontSize: '13px' }}>
+                  <strong>شركات الأمن:</strong> {SECURITY_COMPANIES.join('، ')}
+                </p>
+                <p style={{ margin: '5px 0', fontSize: '13px' }}>
+                  <strong>الوظائف:</strong> {POSITIONS.join('، ')}
+                </p>
+              </div>
+            </details>
           </div>
 
           {/* معاينة البيانات */}

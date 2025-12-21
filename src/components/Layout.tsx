@@ -11,7 +11,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { path: '/candidates', label: 'المرشحين', icon: '👥', permissions: ['security_employee', 'interview_manager', 'admin'] },
     { path: '/interviews', label: 'المقابلات', icon: '📅', permissions: ['interview_manager', 'admin'] },
     { path: '/analytics', label: 'التقارير', icon: '📈', permissions: ['security_employee', 'interview_manager', 'admin'] },
-    { path: '/database', label: 'قاعدة البيانات', icon: '🗄️', permissions: ['interview_manager', 'admin'] },
+    { path: '/database', label: 'قاعدة البيانات', icon: '🗄️', permissions: ['security_employee', 'interview_manager', 'admin'] },
     { path: '/bulk-upload', label: 'رفع ملفات Excel', icon: '📤', permissions: ['security_employee', 'admin'] },
     { path: '/users', label: 'إدارة المستخدمين', icon: '👤', permissions: ['admin'] },
     { path: '/settings', label: 'الإعدادات', icon: '⚙️', permissions: ['admin'] }
