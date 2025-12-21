@@ -75,7 +75,7 @@ const DatabasePage: React.FC = () => {
 
   const unreadNotifications = getUnreadNotifications()
 
-  const canViewDatabase = currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
+  const canViewDatabase = currentUser?.userType === 'security_employee' || currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
   const canDelete = currentUser?.userType === 'admin'
 
   // إضافة رسالة توضيحية للمستخدمين غير المصرح لهم
@@ -330,7 +330,7 @@ const DatabasePage: React.FC = () => {
   }
 
   return (
-    <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
+    <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
       <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
         <div style={{
           display: 'flex',
