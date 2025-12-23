@@ -12,6 +12,7 @@ import DatabasePage from './pages/DatabasePage'
 import SettingsPage from './pages/SettingsPage'
 import Users from './pages/Users'
 import BulkUploadPage from './pages/BulkUploadPage'
+import SecurityPage from './pages/SecurityPage'
 
 const App: React.FC = () => {
   const { currentUser, initializeDemoData, cleanupRealtimeSubscriptions } = useStore()
@@ -82,6 +83,11 @@ const App: React.FC = () => {
           <Route path="/settings" element={
             <ProtectedLayout requiredPermissions={['admin']}>
               <SettingsPage />
+            </ProtectedLayout>
+          } />
+          <Route path="/security" element={
+            <ProtectedLayout requiredPermissions={['admin']}>
+              <SecurityPage />
             </ProtectedLayout>
           } />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />

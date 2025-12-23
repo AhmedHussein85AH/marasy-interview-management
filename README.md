@@ -20,8 +20,10 @@
 - **الأدمن (admin)**: 
   - صلاحيات كاملة لإدارة النظام
   - حذف المرشحين والبيانات
-  - إدارة المستخدمين
+  - إدارة المستخدمين (إضافة، تعديل، حذف، تعطيل/تفعيل)
   - حذف البيانات المكررة
+  - **مراقبة الأمان**: عرض سجلات تسجيل الدخول، الأجهزة المتصلة، والمواقع
+  - **إدارة الحسابات**: تعطيل/تفعيل حسابات المستخدمين
 
 ### 👥 إدارة المرشحين
 - إدخال بيانات المرشحين مع جميع التفاصيل المطلوبة
@@ -47,6 +49,20 @@
 - توزيع المرشحين حسب المحافظة والمؤهل
 - معدلات النجاح والرفض
 - تقارير شاملة لقاعدة البيانات
+
+### 🔒 مراقبة الأمان (للأدمن فقط)
+- **سجلات تسجيل الدخول**: تتبع جميع محاولات تسجيل الدخول
+- **معلومات الأجهزة**: IP Address، نوع الجهاز، المتصفح، نظام التشغيل
+- **الموقع الجغرافي**: البلد والمدينة لكل تسجيل دخول
+- **الجلسات النشطة**: عرض جميع الجلسات الحالية
+- **الفلاتر والبحث**: البحث بالبريد الإلكتروني وحالة الجلسة
+- **تفاصيل الجلسات**: عرض معلومات كاملة عن كل جلسة
+
+### 👤 إدارة الحسابات (للأدمن فقط)
+- **تعطيل/تفعيل الحسابات**: إيقاف أو تفعيل حسابات المستخدمين
+- **منع تسجيل الدخول**: المستخدمون المعطلون لا يمكنهم تسجيل الدخول
+- **عرض حالة الحساب**: Badge يوضح حالة الحساب (نشط/معطل)
+- **حماية الأدمن**: منع تعطيل حساب الأدمن الحالي
 
 ### 🗄️ قاعدة البيانات المحفوظة
 - حفظ المرشحين مع النتائج النهائية
@@ -97,6 +113,9 @@ npm install
   ALTER TABLE candidates 
   ADD COLUMN IF NOT EXISTS work_shift TEXT CHECK (work_shift IN ('نهار', 'ليل'));
   ```
+- **مهم جداً**: نفذ ملفات التحديثات التالية في SQL Editor:
+  1. `supabase_user_status.sql` - لإضافة حقل تعطيل/تفعيل الحسابات
+  2. `supabase_login_logs.sql` - لإنشاء جدول سجلات تسجيل الدخول
 
 4. **إعداد متغيرات البيئة**
 ```bash
@@ -215,6 +234,111 @@ VITE_SECURITY_EMPLOYEE_PASSWORD=your_security_employee_password_here
 - ✅ نسخ احتياطية تلقائية
 - ✅ واجهة إدارة سهلة
 - ✅ **Realtime Subscriptions**: تحديث البيانات في الوقت الفعلي
+- ✅ **سجلات تسجيل الدخول**: تتبع جميع محاولات الدخول
+- ✅ **إدارة الحسابات**: تعطيل/تفعيل الحسابات
+
+### 📋 الجداول في قاعدة البيانات:
+
+1. **users**: جدول المستخدمين
+   - الحقول الأساسية: id, name, email, user_type, department
+   - **is_active**: حالة الحساب (نشط/معطل) - تم إضافته في الإصدار 2.2.0
+
+2. **candidates**: جدول المرشحين
+   - جميع بيانات المرشحين
+   - **work_shift**: الوردية (نهار/ليل) - تم إضافته في الإصدار 2.1.0
+   - **notes**: الملاحظات
+
+3. **saved_candidates**: جدول المرشحين المحفوظين (القرارات النهائية)
+
+4. **interviews**: جدول المقابلات
+
+5. **notifications**: جدول الإشعارات
+
+6. **login_logs**: جدول سجلات تسجيل الدخول (جديد في الإصدار 2.2.0)
+   - معلومات تسجيل الدخول
+   - معلومات الجهاز والموقع
+   - الجلسات النشطة
+
+### 🔧 تحديثات قاعدة البيانات المطلوبة:
+
+للتأكد من أن قاعدة البيانات محدثة مع أحدث الميزات، يجب تنفيذ الملفات التالية في Supabase SQL Editor:
+
+#### 1. تحديث جدول users (إضافة تعطيل/تفعيل الحسابات)
+```sql
+-- ملف: supabase_user_status.sql
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+UPDATE users 
+SET is_active = TRUE 
+WHERE is_active IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
+```
+
+#### 2. إنشاء جدول login_logs (سجلات تسجيل الدخول)
+```sql
+-- ملف: supabase_login_logs.sql
+CREATE TABLE IF NOT EXISTS login_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_email TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  login_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  logout_time TIMESTAMP WITH TIME ZONE,
+  ip_address TEXT,
+  user_agent TEXT,
+  device_type TEXT,
+  browser TEXT,
+  os TEXT,
+  country TEXT,
+  city TEXT,
+  latitude DECIMAL(10, 8),
+  longitude DECIMAL(11, 8),
+  is_active BOOLEAN DEFAULT TRUE,
+  session_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- الفهارس
+CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON login_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_logs_user_email ON login_logs(user_email);
+CREATE INDEX IF NOT EXISTS idx_login_logs_login_time ON login_logs(login_time);
+CREATE INDEX IF NOT EXISTS idx_login_logs_is_active ON login_logs(is_active);
+CREATE INDEX IF NOT EXISTS idx_login_logs_session_id ON login_logs(session_id);
+
+-- Row Level Security
+ALTER TABLE login_logs ENABLE ROW LEVEL SECURITY;
+
+-- السياسات الأمنية
+CREATE POLICY "Admins can view all login logs" ON login_logs
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid()
+      AND users.user_type = 'admin'
+    )
+  );
+
+CREATE POLICY "Users can insert their own login logs" ON login_logs
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can update their own login logs" ON login_logs
+  FOR UPDATE USING (true);
+```
+
+#### 3. تحديث جدول candidates (إضافة الوردية)
+```sql
+-- ملف: supabase_migrations.sql
+ALTER TABLE candidates 
+ADD COLUMN IF NOT EXISTS work_shift TEXT CHECK (work_shift IN ('نهار', 'ليل'));
+```
+
+**⚠️ ملاحظة مهمة:**
+- جميع التحديثات آمنة ولن تؤثر على البيانات الموجودة
+- المستخدمون الحاليون سيصبحون نشطين تلقائياً
+- يمكن تنفيذ جميع الملفات في أي وقت دون مشاكل
 
 ## 🔧 التطوير المستقبلي
 
@@ -225,6 +349,8 @@ VITE_SECURITY_EMPLOYEE_PASSWORD=your_security_employee_password_here
 - [x] قوائم منسدلة للمحافظات وشركات الأمن والوظائف
 - [x] حفظ الوردية والملاحظات
 - [x] صلاحية قاعدة البيانات لموظف الأمن
+- [x] مراقبة الأمان وسجلات تسجيل الدخول
+- [x] إدارة الحسابات (تعطيل/تفعيل)
 - [ ] نظام إشعارات بالبريد الإلكتروني
 - [ ] تقارير PDF قابلة للتصدير
 - [ ] تطبيق موبايل
@@ -252,9 +378,25 @@ VITE_SECURITY_EMPLOYEE_PASSWORD=your_security_employee_password_here
 - **SUPABASE_SETUP.md**: خطوات إعداد Supabase
 - **VERCEL_DEPLOYMENT_GUIDE.md**: دليل النشر على Vercel
 - **supabase_schema.sql**: مخطط قاعدة البيانات الأساسي
-- **supabase_migrations.sql**: التعديلات اللازمة على قاعدة البيانات
+- **supabase_migrations.sql**: التعديلات اللازمة على قاعدة البيانات (إضافة work_shift)
+- **supabase_user_status.sql**: إضافة حقل تعطيل/تفعيل الحسابات (is_active)
+- **supabase_login_logs.sql**: إنشاء جدول سجلات تسجيل الدخول
 
 ## 🔄 التحديثات الأخيرة (Latest Updates)
+
+### الإصدار 2.2.0 (الإصدار الحالي)
+- ✅ **مراقبة الأمان**: صفحة جديدة للأدمن لعرض سجلات تسجيل الدخول
+  - عرض جميع تسجيلات الدخول مع معلومات الجهاز والموقع
+  - تتبع الجلسات النشطة
+  - معلومات IP Address، المتصفح، نظام التشغيل
+  - البلد والمدينة لكل تسجيل دخول
+  - فلاتر للبحث والتصفية
+- ✅ **إدارة الحسابات**: تعطيل/تفعيل حسابات المستخدمين
+  - منع المستخدمين المعطلين من تسجيل الدخول
+  - عرض حالة الحساب في صفحة إدارة المستخدمين
+  - حماية من تعطيل حساب الأدمن الحالي
+  - رسائل خطأ واضحة عند محاولة تسجيل الدخول بحساب معطل
+- ✅ **تسجيل تلقائي**: تسجيل جميع محاولات تسجيل الدخول والخروج تلقائياً
 
 ### الإصدار 2.1.0
 - ✅ **مزامنة فورية**: إضافة Supabase Realtime Subscriptions لتحديث البيانات تلقائياً

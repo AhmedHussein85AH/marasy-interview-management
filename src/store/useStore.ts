@@ -15,6 +15,7 @@ export interface User {
   userType: UserType
   department: string
   createdAt: string
+  isActive?: boolean // حالة الحساب: نشط/معطل
 }
 
 // واجهة المرشح
@@ -73,6 +74,28 @@ export interface Notification {
   candidateId: string
   candidateName: string
   isRead: boolean
+  createdAt: string
+}
+
+// واجهة سجل تسجيل الدخول
+export interface LoginLog {
+  id: string
+  userId: string
+  userEmail: string
+  userName: string
+  loginTime: string
+  logoutTime?: string
+  ipAddress?: string
+  userAgent?: string
+  deviceType?: string
+  browser?: string
+  os?: string
+  country?: string
+  city?: string
+  latitude?: number
+  longitude?: number
+  isActive: boolean
+  sessionId?: string
   createdAt: string
 }
 
@@ -162,9 +185,16 @@ export interface AppState {
   addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
   updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
   deleteUserFromSupabase: (id: string) => Promise<void>
+  toggleUserStatus: (id: string, isActive: boolean) => Promise<void>
   // إعداد الاشتراكات التلقائية
   setupRealtimeSubscriptions: () => void
   cleanupRealtimeSubscriptions: () => void
+  // سجلات تسجيل الدخول
+  loginLogs: LoginLog[]
+  logLogin: (userId: string, userEmail: string, userName: string) => Promise<string>
+  logLogout: (sessionId: string) => Promise<void>
+  loadLoginLogs: () => Promise<void>
+  getActiveSessions: () => LoginLog[]
   }
 
 // متغيرات لتخزين الاشتراكات
@@ -183,6 +213,7 @@ export const useStore = create<AppState>()(
       savedCandidates: [],
       notifications: [],
       interviews: [],
+      loginLogs: [],
       stats: {
         totalCandidates: 0,
         pendingInterviews: 0,
@@ -211,6 +242,12 @@ export const useStore = create<AppState>()(
           return false
         }
         
+        // التحقق من حالة الحساب (نشط/معطل)
+        if (user.isActive === false) {
+          console.log('❌ [STORE] الحساب معطل')
+          return false
+        }
+        
         // قائمة كلمات المرور المحددة - محمية بمتغيرات البيئة
         const passwords: { [key: string]: string } = {
           'security@company.com': import.meta.env.VITE_SECURITY_EMPLOYEE_PASSWORD || 'Sec@135$',
@@ -229,6 +266,8 @@ export const useStore = create<AppState>()(
           set({ currentUser: user })
           // حفظ الجلسة في localStorage
           get().saveUserSession(user)
+          // تسجيل الدخول في السجلات
+          await get().logLogin(user.id, user.email, user.name)
           console.log('🎉 [STORE] تم تسجيل الدخول بنجاح!')
           console.log('👤 [STORE] المستخدم:', user.name)
           console.log('🏢 [STORE] القسم:', user.department)
@@ -240,12 +279,23 @@ export const useStore = create<AppState>()(
       },
 
       // تسجيل الخروج
-      logout: () => {
+      logout: async () => {
+        const { currentUser } = get()
+        // الحصول على sessionId من localStorage قبل الحذف
+        const sessionId = localStorage.getItem('currentSessionId')
+        
         // تنظيف الاشتراكات قبل تسجيل الخروج
         get().cleanupRealtimeSubscriptions()
         set({ currentUser: null })
+        
+        // تسجيل الخروج في السجلات
+        if (sessionId) {
+          await get().logLogout(sessionId)
+        }
+        
         // حذف الجلسة من localStorage
         localStorage.removeItem('currentUser')
+        localStorage.removeItem('currentSessionId')
         try {
           // محاولة تسجيل الخروج من Supabase إن وُجدت جلسة
           supabase.auth.signOut()
@@ -258,7 +308,7 @@ export const useStore = create<AppState>()(
           // جلب بيانات المستخدم من جدول users في Supabase
           const { data, error } = await supabase
             .from('users')
-            .select('id, name, email, user_type, department, created_at')
+            .select('id, name, email, user_type, department, created_at, is_active')
             .eq('email', email)
             .maybeSingle()
 
@@ -266,13 +316,20 @@ export const useStore = create<AppState>()(
 
           let mappedUser: User
           if (data) {
+            // التحقق من حالة الحساب (نشط/معطل)
+            if (data.is_active === false) {
+              console.log('❌ [STORE] الحساب معطل')
+              return false
+            }
+            
             mappedUser = {
               id: data.id,
               name: data.name,
               email: data.email,
               userType: data.user_type as UserType,
               department: data.department,
-              createdAt: data.created_at
+              createdAt: data.created_at,
+              isActive: data.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
             }
           } else {
             // في حال عدم وجود صف، ننشئ مستخدماً افتراضياً بحد أدنى من المعلومات
@@ -282,7 +339,8 @@ export const useStore = create<AppState>()(
               email,
               userType: 'security_employee',
               department: 'General',
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              isActive: true
             }
           }
 
@@ -294,6 +352,8 @@ export const useStore = create<AppState>()(
           if (!existing) {
             set(state => ({ users: [...state.users, mappedUser] }))
           }
+          // تسجيل الدخول في السجلات
+          await get().logLogin(mappedUser.id, mappedUser.email, mappedUser.name)
           return true
         } catch (e) {
           return false
@@ -1242,7 +1302,7 @@ export const useStore = create<AppState>()(
         try {
           const { data, error } = await supabase
             .from('users')
-            .select('id, name, email, user_type, department, created_at')
+            .select('id, name, email, user_type, department, created_at, is_active')
             .order('created_at', { ascending: false })
           
           if (!error && data) {
@@ -1252,7 +1312,8 @@ export const useStore = create<AppState>()(
               email: u.email,
               userType: u.user_type as UserType,
               department: u.department,
-              createdAt: u.created_at
+              createdAt: u.created_at,
+              isActive: u.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
             }))
             set({ users: mapped })
           }
@@ -1269,9 +1330,10 @@ export const useStore = create<AppState>()(
             name: user.name, 
             email: user.email, 
             user_type: user.userType, 
-            department: user.department 
+            department: user.department,
+            is_active: true // المستخدمون الجدد نشطين افتراضياً
           }])
-          .select('id, name, email, user_type, department, created_at')
+          .select('id, name, email, user_type, department, created_at, is_active')
           .single()
         
         if (error) throw error
@@ -1282,7 +1344,8 @@ export const useStore = create<AppState>()(
           email: data.email,
           userType: data.user_type as UserType,
           department: data.department,
-          createdAt: data.created_at
+          createdAt: data.created_at,
+          isActive: data.is_active ?? true
         }
         
         set(state => ({ users: [mapped, ...state.users] }))
@@ -1336,6 +1399,52 @@ export const useStore = create<AppState>()(
           console.log('تم حذف المستخدم بنجاح')
         } catch (error) {
           console.error('خطأ في حذف المستخدم:', error)
+          throw error
+        }
+      },
+
+      // تعطيل/تفعيل حساب مستخدم
+      toggleUserStatus: async (id, isActive) => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') {
+          throw new Error('غير مصرح لك بتعطيل/تفعيل المستخدمين')
+        }
+
+        // منع تعطيل حساب المستخدم الحالي
+        if (currentUser.id === id && !isActive) {
+          throw new Error('لا يمكنك تعطيل حسابك الخاص')
+        }
+
+        try {
+          // تحديث في Supabase
+          const { error } = await supabase
+            .from('users')
+            .update({ is_active: isActive })
+            .eq('id', id)
+
+          if (error) {
+            console.error('خطأ في تحديث حالة المستخدم:', error)
+            throw error
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            users: state.users.map(u =>
+              u.id === id ? { ...u, isActive } : u
+            )
+          }))
+
+          // إذا تم تعطيل المستخدم وكان مسجل دخول، تسجيل خروجه
+          if (!isActive) {
+            const user = get().users.find(u => u.id === id)
+            if (user && get().currentUser?.id === id) {
+              await get().logout()
+            }
+          }
+
+          console.log(`تم ${isActive ? 'تفعيل' : 'تعطيل'} المستخدم بنجاح`)
+        } catch (error) {
+          console.error('خطأ في تحديث حالة المستخدم:', error)
           throw error
         }
       },
@@ -1577,6 +1686,217 @@ export const useStore = create<AppState>()(
         }
         
         console.log('✅ تم تنظيف الاشتراكات')
+      },
+
+      // دالة للحصول على معلومات الجهاز والموقع
+      getDeviceInfo: async () => {
+        try {
+          // الحصول على IP Address
+          const ipResponse = await fetch('https://api.ipify.org?format=json')
+          const ipData = await ipResponse.json()
+          const ipAddress = ipData.ip
+
+          // الحصول على معلومات الموقع من IP
+          let locationData: any = {}
+          try {
+            const locationResponse = await fetch(`https://ipapi.co/${ipAddress}/json/`)
+            locationData = await locationResponse.json()
+          } catch (e) {
+            console.log('فشل في الحصول على الموقع من ipapi.co')
+          }
+
+          // تحليل User Agent
+          const userAgent = navigator.userAgent
+          const deviceType = /Mobile|Android|iPhone|iPad/.test(userAgent) ? 'موبايل' : 'كمبيوتر'
+          
+          let browser = 'غير معروف'
+          if (userAgent.includes('Chrome')) browser = 'Chrome'
+          else if (userAgent.includes('Firefox')) browser = 'Firefox'
+          else if (userAgent.includes('Safari')) browser = 'Safari'
+          else if (userAgent.includes('Edge')) browser = 'Edge'
+
+          let os = 'غير معروف'
+          if (userAgent.includes('Windows')) os = 'Windows'
+          else if (userAgent.includes('Mac')) os = 'macOS'
+          else if (userAgent.includes('Linux')) os = 'Linux'
+          else if (userAgent.includes('Android')) os = 'Android'
+          else if (userAgent.includes('iOS')) os = 'iOS'
+
+          return {
+            ipAddress,
+            userAgent,
+            deviceType,
+            browser,
+            os,
+            country: locationData.country_name || 'غير معروف',
+            city: locationData.city || 'غير معروف',
+            latitude: locationData.latitude || null,
+            longitude: locationData.longitude || null
+          }
+        } catch (error) {
+          console.error('خطأ في الحصول على معلومات الجهاز:', error)
+          return {
+            ipAddress: 'غير معروف',
+            userAgent: navigator.userAgent,
+            deviceType: 'غير معروف',
+            browser: 'غير معروف',
+            os: 'غير معروف',
+            country: 'غير معروف',
+            city: 'غير معروف',
+            latitude: null,
+            longitude: null
+          }
+        }
+      },
+
+      // تسجيل الدخول في السجلات
+      logLogin: async (userId, userEmail, userName) => {
+        try {
+          const deviceInfo = await get().getDeviceInfo()
+          const sessionId = `${userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          
+          // حفظ sessionId في localStorage
+          localStorage.setItem('currentSessionId', sessionId)
+
+          const loginLog = {
+            user_id: userId,
+            user_email: userEmail,
+            user_name: userName,
+            ip_address: deviceInfo.ipAddress,
+            user_agent: deviceInfo.userAgent,
+            device_type: deviceInfo.deviceType,
+            browser: deviceInfo.browser,
+            os: deviceInfo.os,
+            country: deviceInfo.country,
+            city: deviceInfo.city,
+            latitude: deviceInfo.latitude,
+            longitude: deviceInfo.longitude,
+            is_active: true,
+            session_id: sessionId
+          }
+
+          const { data, error } = await supabase
+            .from('login_logs')
+            .insert([loginLog])
+            .select()
+            .single()
+
+          if (error) {
+            console.error('خطأ في تسجيل الدخول:', error)
+            return sessionId
+          }
+
+          // تحديث الحالة المحلية
+          if (data) {
+            const transformedLog: LoginLog = {
+              id: data.id,
+              userId: data.user_id,
+              userEmail: data.user_email,
+              userName: data.user_name,
+              loginTime: data.login_time,
+              logoutTime: data.logout_time,
+              ipAddress: data.ip_address,
+              userAgent: data.user_agent,
+              deviceType: data.device_type,
+              browser: data.browser,
+              os: data.os,
+              country: data.country,
+              city: data.city,
+              latitude: data.latitude,
+              longitude: data.longitude,
+              isActive: data.is_active,
+              sessionId: data.session_id,
+              createdAt: data.created_at
+            }
+            set(state => ({
+              loginLogs: [transformedLog, ...state.loginLogs]
+            }))
+          }
+
+          return sessionId
+        } catch (error) {
+          console.error('خطأ في تسجيل الدخول:', error)
+          return `${userId}-${Date.now()}`
+        }
+      },
+
+      // تسجيل الخروج في السجلات
+      logLogout: async (sessionId) => {
+        try {
+          const { error } = await supabase
+            .from('login_logs')
+            .update({
+              logout_time: new Date().toISOString(),
+              is_active: false
+            })
+            .eq('session_id', sessionId)
+
+          if (error) {
+            console.error('خطأ في تسجيل الخروج:', error)
+            return
+          }
+
+          // تحديث الحالة المحلية
+          set(state => ({
+            loginLogs: state.loginLogs.map(log =>
+              log.sessionId === sessionId
+                ? { ...log, logoutTime: new Date().toISOString(), isActive: false }
+                : log
+            )
+          }))
+        } catch (error) {
+          console.error('خطأ في تسجيل الخروج:', error)
+        }
+      },
+
+      // تحميل سجلات تسجيل الدخول
+      loadLoginLogs: async () => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') return
+
+        try {
+          const { data, error } = await supabase
+            .from('login_logs')
+            .select('*')
+            .order('login_time', { ascending: false })
+            .limit(1000)
+
+          if (error) {
+            console.error('خطأ في تحميل سجلات الدخول:', error)
+            return
+          }
+
+          const transformedLogs: LoginLog[] = (data || []).map(log => ({
+            id: log.id,
+            userId: log.user_id,
+            userEmail: log.user_email,
+            userName: log.user_name,
+            loginTime: log.login_time,
+            logoutTime: log.logout_time,
+            ipAddress: log.ip_address,
+            userAgent: log.user_agent,
+            deviceType: log.device_type,
+            browser: log.browser,
+            os: log.os,
+            country: log.country,
+            city: log.city,
+            latitude: log.latitude,
+            longitude: log.longitude,
+            isActive: log.is_active,
+            sessionId: log.session_id,
+            createdAt: log.created_at
+          }))
+
+          set({ loginLogs: transformedLogs })
+        } catch (error) {
+          console.error('خطأ في تحميل سجلات الدخول:', error)
+        }
+      },
+
+      // الحصول على الجلسات النشطة
+      getActiveSessions: () => {
+        const { loginLogs } = get()
+        return loginLogs.filter(log => log.isActive)
       },
 
       // إضافة وظيفة set للوصول المباشر

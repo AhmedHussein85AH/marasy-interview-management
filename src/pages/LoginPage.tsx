@@ -66,6 +66,16 @@ const LoginPage: React.FC = () => {
         }
         return
       }
+      
+      // التحقق من حالة الحساب بعد تسجيل الدخول عبر Supabase
+      if (data.session) {
+        const loginResult = await loginWithSupabase(email)
+        if (!loginResult) {
+          // قد يكون الحساب معطل
+          setError('الحساب معطل أو غير موجود. يرجى التواصل مع المدير.')
+          return
+        }
+      }
     } catch (err: any) {
       // في حالة وجود خطأ في الاتصال
       console.error('خطأ في الاتصال بـ Supabase:', err)
@@ -90,8 +100,21 @@ const LoginPage: React.FC = () => {
     if (expectedPassword === password) {
       const user = users.find(u => u.email === email)
       if (user) {
+        // التحقق من حالة الحساب قبل محاولة تسجيل الدخول
+        if (user.isActive === false) {
+          setError('الحساب معطل. يرجى التواصل مع المدير لإعادة تفعيل الحساب.')
+          return
+        }
         const success = await login(email, password)
-        if (!success) setError('فشل في تسجيل الدخول - حاول مرة أخرى')
+        if (!success) {
+          // التحقق مرة أخرى من حالة الحساب بعد محاولة تسجيل الدخول
+          const updatedUser = users.find(u => u.email === email)
+          if (updatedUser?.isActive === false) {
+            setError('الحساب معطل. يرجى التواصل مع المدير لإعادة تفعيل الحساب.')
+          } else {
+            setError('فشل في تسجيل الدخول - حاول مرة أخرى')
+          }
+        }
       } else {
         setError('المستخدم غير موجود - اضغط "إعادة تهيئة البيانات"')
       }

@@ -9,6 +9,7 @@ export interface Database {
           user_type: 'security_employee' | 'interview_manager' | 'admin'
           department: string
           created_at: string
+          is_active: boolean | null
         }
         Insert: {
           id?: string
@@ -17,6 +18,7 @@ export interface Database {
           user_type: 'security_employee' | 'interview_manager' | 'admin'
           department: string
           created_at?: string
+          is_active?: boolean | null
         }
         Update: {
           id?: string
@@ -25,6 +27,7 @@ export interface Database {
           user_type?: 'security_employee' | 'interview_manager' | 'admin'
           department?: string
           created_at?: string
+          is_active?: boolean | null
         }
       }
       candidates: {
@@ -209,6 +212,68 @@ export interface Database {
           candidate_id?: string
           candidate_name?: string
           is_read?: boolean
+          created_at?: string
+        }
+      }
+      login_logs: {
+        Row: {
+          id: string
+          user_id: string
+          user_email: string
+          user_name: string
+          login_time: string
+          logout_time: string | null
+          ip_address: string | null
+          user_agent: string | null
+          device_type: string | null
+          browser: string | null
+          os: string | null
+          country: string | null
+          city: string | null
+          latitude: number | null
+          longitude: number | null
+          is_active: boolean
+          session_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          user_email: string
+          user_name: string
+          login_time?: string
+          logout_time?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          device_type?: string | null
+          browser?: string | null
+          os?: string | null
+          country?: string | null
+          city?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          is_active?: boolean
+          session_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          user_email?: string
+          user_name?: string
+          login_time?: string
+          logout_time?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          device_type?: string | null
+          browser?: string | null
+          os?: string | null
+          country?: string | null
+          city?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          is_active?: boolean
+          session_id?: string | null
           created_at?: string
         }
       }

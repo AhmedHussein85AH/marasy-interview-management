@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Plus, User, Mail, Shield, Building, Edit, Trash2, Save, X } from 'lucide-react'
+import { Plus, User, Mail, Shield, Building, Edit, Trash2, Save, X, Ban, CheckCircle } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -9,7 +9,7 @@ import { useState } from 'react'
 
 
 export default function Users() {
-  const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase, deleteUserFromSupabase } = useStore()
+  const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase, deleteUserFromSupabase, toggleUserStatus } = useStore()
   const [isAddingUser, setIsAddingUser] = useState(false)
   const [editingUser, setEditingUser] = useState<string | null>(null)
   const [newUser, setNewUser] = useState({
@@ -88,6 +88,26 @@ export default function Users() {
       alert(err.message || 'فشل في حذف المستخدم')
     } finally {
       setDeletingUserId(null)
+    }
+  }
+
+  const handleToggleStatus = async (userId: string, userName: string, currentStatus: boolean) => {
+    const action = currentStatus ? 'تعطيل' : 'تفعيل'
+    if (!window.confirm(`هل أنت متأكد من ${action} حساب "${userName}"؟`)) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    
+    try {
+      await toggleUserStatus(userId, !currentStatus)
+      alert(`تم ${action} الحساب بنجاح`)
+    } catch (err: any) {
+      setError(err.message || `فشل في ${action} الحساب`)
+      alert(err.message || `فشل في ${action} الحساب`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -280,21 +300,40 @@ export default function Users() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-2">
-                      <Badge variant={getRoleColor(user.userType)}>
-                        {getRoleLabel(user.userType)}
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={getRoleColor(user.userType)}>
+                      {getRoleLabel(user.userType)}
+                    </Badge>
+                    {user.isActive === false && (
+                      <Badge variant="destructive" className="mr-2">
+                        معطل
                       </Badge>
-                      {canManageUsers && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingUser(user.id)}
-                            disabled={loading || deletingUserId === user.id}
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          {currentUser?.id !== user.id && (
+                    )}
+                    {canManageUsers && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingUser(user.id)}
+                          disabled={loading || deletingUserId === user.id}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        {currentUser?.id !== user.id && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant={user.isActive === false ? "default" : "outline"}
+                              onClick={() => handleToggleStatus(user.id, user.name, user.isActive ?? true)}
+                              disabled={loading || deletingUserId === user.id}
+                              title={user.isActive === false ? 'تفعيل الحساب' : 'تعطيل الحساب'}
+                            >
+                              {user.isActive === false ? (
+                                <CheckCircle className="h-3 w-3" />
+                              ) : (
+                                <Ban className="h-3 w-3" />
+                              )}
+                            </Button>
                             <Button
                               size="sm"
                               variant="destructive"
@@ -307,10 +346,11 @@ export default function Users() {
                                 <Trash2 className="h-3 w-3" />
                               )}
                             </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
                   )}
                 </div>
               </motion.div>
