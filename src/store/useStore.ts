@@ -306,26 +306,55 @@ export const useStore = create<AppState>()(
       loginWithSupabase: async (email: string) => {
         try {
           // جلب بيانات المستخدم من جدول users في Supabase
+          const normalizedEmail = email.trim().toLowerCase()
           const { data, error } = await supabase
             .from('users')
             .select('id, name, email, user_type, department, created_at, is_active')
-            .eq('email', email)
+            .eq('email', normalizedEmail)
             .maybeSingle()
 
           if (error) {
             console.error('❌ [STORE] خطأ في جلب بيانات المستخدم:', error)
-            throw error
+            throw new Error(`خطأ في الاتصال بقاعدة البيانات: ${error.message}`)
           }
 
-          // التحقق من وجود المستخدم في جدول users
           if (!data) {
-            console.error('❌ [STORE] المستخدم غير موجود في جدول users:', email)
+            // محاولة البحث بدون حساسية الأحرف
+            const { data: dataCaseInsensitive } = await supabase
+              .from('users')
+              .select('id, name, email, user_type, department, created_at, is_active')
+              .ilike('email', email)
+              .maybeSingle()
+            
+            if (dataCaseInsensitive) {
+              const mappedUser: User = {
+                id: dataCaseInsensitive.id,
+                name: dataCaseInsensitive.name,
+                email: dataCaseInsensitive.email,
+                userType: dataCaseInsensitive.user_type as UserType,
+                department: dataCaseInsensitive.department,
+                createdAt: dataCaseInsensitive.created_at,
+                isActive: dataCaseInsensitive.is_active ?? true
+              }
+              
+              if (mappedUser.isActive === false) {
+                throw new Error('الحساب معطل. يرجى التواصل مع المدير لإعادة تفعيل الحساب.')
+              }
+              
+              set({ currentUser: mappedUser })
+              get().saveUserSession(mappedUser)
+              const existing = get().users.find(u => u.email === mappedUser.email)
+              if (!existing) {
+                set(state => ({ users: [...state.users, mappedUser] }))
+              }
+              await get().logLogin(mappedUser.id, mappedUser.email, mappedUser.name)
+              return true
+            }
+            
             throw new Error('المستخدم غير موجود في قاعدة البيانات. يرجى التواصل مع المدير لإضافة المستخدم.')
           }
 
-          // التحقق من حالة الحساب (نشط/معطل)
           if (data.is_active === false) {
-            console.log('❌ [STORE] الحساب معطل')
             throw new Error('الحساب معطل. يرجى التواصل مع المدير لإعادة تفعيل الحساب.')
           }
           
@@ -336,23 +365,19 @@ export const useStore = create<AppState>()(
             userType: data.user_type as UserType,
             department: data.department,
             createdAt: data.created_at,
-            isActive: data.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
+            isActive: data.is_active ?? true
           }
 
           set({ currentUser: mappedUser })
-          // حفظ الجلسة في localStorage
           get().saveUserSession(mappedUser)
-          // إضافة المستخدم للذاكرة إن لم يكن موجوداً في القائمة الحالية
           const existing = get().users.find(u => u.email === mappedUser.email)
           if (!existing) {
             set(state => ({ users: [...state.users, mappedUser] }))
           }
-          // تسجيل الدخول في السجلات
           await get().logLogin(mappedUser.id, mappedUser.email, mappedUser.name)
           return true
         } catch (e: any) {
           console.error('❌ [STORE] خطأ في تسجيل الدخول:', e)
-          // إرجاع رسالة الخطأ إذا كانت موجودة
           if (e?.message) {
             throw e
           }
