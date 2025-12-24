@@ -312,36 +312,31 @@ export const useStore = create<AppState>()(
             .eq('email', email)
             .maybeSingle()
 
-          if (error) throw error
+          if (error) {
+            console.error('❌ [STORE] خطأ في جلب بيانات المستخدم:', error)
+            throw error
+          }
 
-          let mappedUser: User
-          if (data) {
-            // التحقق من حالة الحساب (نشط/معطل)
-            if (data.is_active === false) {
-              console.log('❌ [STORE] الحساب معطل')
-              return false
-            }
-            
-            mappedUser = {
-              id: data.id,
-              name: data.name,
-              email: data.email,
-              userType: data.user_type as UserType,
-              department: data.department,
-              createdAt: data.created_at,
-              isActive: data.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
-            }
-          } else {
-            // في حال عدم وجود صف، ننشئ مستخدماً افتراضياً بحد أدنى من المعلومات
-            mappedUser = {
-              id: Date.now().toString(),
-              name: email.split('@')[0],
-              email,
-              userType: 'security_employee',
-              department: 'General',
-              createdAt: new Date().toISOString(),
-              isActive: true
-            }
+          // التحقق من وجود المستخدم في جدول users
+          if (!data) {
+            console.error('❌ [STORE] المستخدم غير موجود في جدول users:', email)
+            throw new Error('المستخدم غير موجود في قاعدة البيانات. يرجى التواصل مع المدير لإضافة المستخدم.')
+          }
+
+          // التحقق من حالة الحساب (نشط/معطل)
+          if (data.is_active === false) {
+            console.log('❌ [STORE] الحساب معطل')
+            throw new Error('الحساب معطل. يرجى التواصل مع المدير لإعادة تفعيل الحساب.')
+          }
+          
+          const mappedUser: User = {
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            userType: data.user_type as UserType,
+            department: data.department,
+            createdAt: data.created_at,
+            isActive: data.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
           }
 
           set({ currentUser: mappedUser })
@@ -355,7 +350,12 @@ export const useStore = create<AppState>()(
           // تسجيل الدخول في السجلات
           await get().logLogin(mappedUser.id, mappedUser.email, mappedUser.name)
           return true
-        } catch (e) {
+        } catch (e: any) {
+          console.error('❌ [STORE] خطأ في تسجيل الدخول:', e)
+          // إرجاع رسالة الخطأ إذا كانت موجودة
+          if (e?.message) {
+            throw e
+          }
           return false
         }
       },

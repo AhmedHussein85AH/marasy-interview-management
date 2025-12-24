@@ -53,8 +53,17 @@ const LoginPage: React.FC = () => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (!error && data.session) {
-        await loginWithSupabase(email)
-        return
+        try {
+          const loginResult = await loginWithSupabase(email)
+          if (!loginResult) {
+            setError('فشل في تسجيل الدخول. يرجى التحقق من بياناتك أو التواصل مع المدير.')
+          }
+          return
+        } catch (loginError: any) {
+          // عرض رسالة الخطأ من loginWithSupabase
+          setError(loginError?.message || 'فشل في تسجيل الدخول. يرجى التواصل مع المدير.')
+          return
+        }
       }
       
       // إذا كان هناك خطأ من Supabase، عرض رسالة واضحة
@@ -66,20 +75,15 @@ const LoginPage: React.FC = () => {
         }
         return
       }
-      
-      // التحقق من حالة الحساب بعد تسجيل الدخول عبر Supabase
-      if (data.session) {
-        const loginResult = await loginWithSupabase(email)
-        if (!loginResult) {
-          // قد يكون الحساب معطل
-          setError('الحساب معطل أو غير موجود. يرجى التواصل مع المدير.')
-          return
-        }
-      }
     } catch (err: any) {
       // في حالة وجود خطأ في الاتصال
       console.error('خطأ في الاتصال بـ Supabase:', err)
-      setError('خطأ في الاتصال. يرجى المحاولة مرة أخرى أو التواصل مع المدير.')
+      // إذا كانت هناك رسالة خطأ محددة، استخدمها
+      if (err?.message) {
+        setError(err.message)
+      } else {
+        setError('خطأ في الاتصال. يرجى المحاولة مرة أخرى أو التواصل مع المدير.')
+      }
       return
     }
 
