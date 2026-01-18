@@ -1444,39 +1444,153 @@ export const useStore = create<AppState>()(
   // إضافة عدة مرشحين من ملف Excel
   bulkAddCandidates: async (candidates: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
     const { currentUser } = get()
-    if (!currentUser || currentUser.userType !== 'admin') return { success: 0, failed: 0, errors: [] }
+    if (!currentUser || (currentUser.userType !== 'admin' && currentUser.userType !== 'security_employee')) return { success: 0, failed: 0, errors: [] }
 
     let successCount = 0
     let failedCount = 0
     const errors: string[] = []
 
     try {
-      for (const candidateData of candidates) {
-        try {
-          // فحص التكرار من قاعدة البيانات أولاً
-          const { data: existingInDB } = await supabase
-            .from('candidates')
-            .select('id, national_id')
-            .eq('national_id', candidateData.nationalId)
-            .maybeSingle()
+      if (candidates.length === 0) {
+        return { success: 0, failed: 0, errors: [] }
+      }
 
-          // فحص أيضاً من الحالة المحلية
-          const existingCandidate = get().candidates.find(
-            c => c.nationalId === candidateData.nationalId
-          )
+      // جمع جميع الأرقام القومية للفحص الجماعي
+      const nationalIds = candidates.map(c => c.nationalId).filter(id => id)
+      
+      // فحص التكرار من قاعدة البيانات (جميع الأرقام القومية دفعة واحدة)
+      const { data: existingInDB } = await supabase
+        .from('candidates')
+        .select('national_id')
+        .in('national_id', nationalIds)
 
-          if (existingCandidate || existingInDB) {
-            errors.push(`المرشح ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً`)
-            failedCount++
-            continue
-          }
+      const existingNationalIdsInDB = new Set(existingInDB?.map(c => c.national_id) || [])
 
-          // إضافة المرشح
-          await get().addCandidate(candidateData)
-          successCount++
-        } catch (error) {
-          errors.push(`خطأ في إضافة ${candidateData.name}: ${error}`)
+      // فحص أيضاً من الحالة المحلية
+      const existingCandidates = get().candidates
+      const existingNationalIdsLocal = new Set(existingCandidates.map(c => c.nationalId))
+
+      // فحص التكرار داخل الملف نفسه
+      const nationalIdCounts = new Map<string, number>()
+      candidates.forEach(c => {
+        const count = nationalIdCounts.get(c.nationalId) || 0
+        nationalIdCounts.set(c.nationalId, count + 1)
+      })
+
+      // تصفية المرشحين المكررين
+      const candidatesToAdd: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>[] = []
+      
+      candidates.forEach((candidateData, index) => {
+        // فحص التكرار داخل الملف
+        if ((nationalIdCounts.get(candidateData.nationalId) || 0) > 1) {
+          errors.push(`المرشح ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) مكرر داخل الملف`)
           failedCount++
+          return
+        }
+
+        // فحص التكرار من قاعدة البيانات أو الحالة المحلية
+        if (existingNationalIdsInDB.has(candidateData.nationalId) || existingNationalIdsLocal.has(candidateData.nationalId)) {
+          errors.push(`المرشح ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً في النظام`)
+          failedCount++
+          return
+        }
+
+        candidatesToAdd.push(candidateData)
+      })
+
+      // فحص المرشحين المرفوضين مسبقاً (جميع الأرقام القومية دفعة واحدة)
+      const candidateNationalIds = candidatesToAdd.map(c => c.nationalId)
+      const { data: rejectedCandidates } = await supabase
+        .from('saved_candidates')
+        .select('national_id, decision_date')
+        .in('national_id', candidateNationalIds)
+        .eq('final_result', 'مرفوض')
+
+      const rejectedMap = new Map<string, string>()
+      rejectedCandidates?.forEach(rc => {
+        rejectedMap.set(rc.national_id, rc.decision_date)
+      })
+
+      // فحص أيضاً من الحالة المحلية
+      const savedCandidates = get().savedCandidates
+      savedCandidates.forEach(sc => {
+        if (sc.finalResult === 'مرفوض' && candidateNationalIds.includes(sc.nationalId)) {
+          rejectedMap.set(sc.nationalId, sc.decisionDate)
+        }
+      })
+
+      // إعداد البيانات للإدراج الجماعي
+      const { currentUser } = get()
+      const candidatesToInsert = candidatesToAdd.map(candidateData => ({
+        name: candidateData.name,
+        national_id: candidateData.nationalId,
+        birth_date: candidateData.birthDate,
+        governorate: candidateData.governorate,
+        qualification: candidateData.qualification,
+        marital_status: candidateData.maritalStatus,
+        security_company: candidateData.securityCompany,
+        position: candidateData.position || null,
+        offer_date: candidateData.offerDate,
+        offer_result: candidateData.offerResult || 'في انتظار',
+        status: 'جديد' as const,
+        created_by: currentUser?.name || 'نظام',
+        notes: candidateData.notes || null,
+        is_rejected_before: rejectedMap.has(candidateData.nationalId),
+        previous_rejection_date: rejectedMap.get(candidateData.nationalId) || null
+      }))
+
+      // إدراج جميع المرشحين دفعة واحدة
+      if (candidatesToInsert.length > 0) {
+        const { data: insertedData, error: insertError } = await supabase
+          .from('candidates')
+          .insert(candidatesToInsert)
+          .select()
+
+        if (insertError) {
+          // إذا فشل الإدراج الجماعي، حاول إدراجهم واحداً تلو الآخر
+          console.warn('فشل الإدراج الجماعي، جاري المحاولة واحداً تلو الآخر:', insertError)
+          for (const candidateData of candidatesToAdd) {
+            try {
+              await get().addCandidate(candidateData)
+              successCount++
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error)
+              errors.push(`خطأ في إضافة ${candidateData.name}: ${errorMessage}`)
+              failedCount++
+            }
+          }
+        } else {
+          // نجح الإدراج الجماعي
+          successCount = insertedData?.length || 0
+          
+          // تحديث الحالة المحلية
+          if (insertedData) {
+            const transformedCandidates: Candidate[] = insertedData.map(data => ({
+              id: data.id,
+              name: data.name,
+              nationalId: data.national_id,
+              birthDate: data.birth_date,
+              governorate: data.governorate,
+              qualification: data.qualification,
+              maritalStatus: data.marital_status as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
+              securityCompany: data.security_company,
+              position: data.position || undefined,
+              offerDate: data.offer_date,
+              offerResult: data.offer_result as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار',
+              status: data.status as 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض',
+              createdBy: data.created_by,
+              notes: data.notes || undefined,
+              workShift: data.work_shift as 'نهار' | 'ليل' | undefined,
+              createdAt: data.created_at,
+              updatedAt: data.updated_at,
+              isRejectedBefore: data.is_rejected_before,
+              previousRejectionDate: data.previous_rejection_date || undefined
+            }))
+
+            set(state => ({
+              candidates: [...state.candidates, ...transformedCandidates]
+            }))
+          }
         }
       }
 
@@ -1497,90 +1611,186 @@ export const useStore = create<AppState>()(
     const errors: string[] = []
 
     try {
-      for (const candidateData of candidates) {
-        try {
-          // فحص التكرار من قاعدة البيانات أولاً
-          const { data: existingInDB } = await supabase
-            .from('saved_candidates')
-            .select('id, national_id')
-            .eq('national_id', candidateData.nationalId)
-            .maybeSingle()
+      if (candidates.length === 0) {
+        return { success: 0, failed: 0, errors: [] }
+      }
 
-          // فحص أيضاً من الحالة المحلية
-          const existingCandidate = get().savedCandidates.find(
-            c => c.nationalId === candidateData.nationalId
-          )
+      // جمع جميع الأرقام القومية للفحص الجماعي
+      const nationalIds = candidates.map(c => c.nationalId).filter(id => id)
+      
+      // فحص التكرار من قاعدة البيانات (جميع الأرقام القومية دفعة واحدة)
+      const { data: existingInDB } = await supabase
+        .from('saved_candidates')
+        .select('national_id')
+        .in('national_id', nationalIds)
 
-          if (existingCandidate || existingInDB) {
-            errors.push(`المرشح المحفوظ ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً`)
-            failedCount++
-            continue
-          }
+      const existingNationalIdsInDB = new Set(existingInDB?.map(c => c.national_id) || [])
 
-          // إضافة المرشح المحفوظ مباشرة إلى Supabase
-          const { data, error } = await supabase
-            .from('saved_candidates')
-            .insert([{
-              name: candidateData.name,
-              national_id: candidateData.nationalId,
-              birth_date: candidateData.birthDate,
-              governorate: candidateData.governorate,
-              qualification: candidateData.qualification,
-              marital_status: candidateData.maritalStatus,
-              security_company: candidateData.securityCompany,
-              position: candidateData.position || null,
-              offer_date: candidateData.offerDate,
-              final_result: candidateData.finalResult,
-              decision_date: candidateData.decisionDate,
-              decision_by: candidateData.decisionBy,
-              notes: candidateData.notes || null,
-              work_shift: candidateData.workShift || null,
-              exclusion_reason: candidateData.exclusionReason || null,
-              resignation_reason: candidateData.resignationReason || null,
-              is_rejected_before: candidateData.isRejectedBefore,
-              previous_rejection_date: candidateData.previousRejectionDate || null
-            }])
-            .select()
-            .single()
+      // فحص أيضاً من الحالة المحلية
+      const existingSavedCandidates = get().savedCandidates
+      const existingNationalIdsLocal = new Set(existingSavedCandidates.map(c => c.nationalId))
 
-          if (error) {
-            errors.push(`خطأ في إضافة ${candidateData.name}: ${error.message}`)
-            failedCount++
-            continue
-          }
+      // فحص التكرار داخل الملف نفسه
+      const nationalIdCounts = new Map<string, number>()
+      candidates.forEach(c => {
+        const count = nationalIdCounts.get(c.nationalId) || 0
+        nationalIdCounts.set(c.nationalId, count + 1)
+      })
 
-          // تحديث الحالة المحلية - تحويل من snake_case إلى camelCase
-          const transformedData: SavedCandidate = {
-            id: data.id,
-            name: data.name,
-            nationalId: data.national_id,
-            birthDate: data.birth_date,
-            governorate: data.governorate,
-            qualification: data.qualification,
-            maritalStatus: data.marital_status,
-            securityCompany: data.security_company,
-            position: data.position,
-            offerDate: data.offer_date,
-            finalResult: data.final_result,
-            decisionDate: data.decision_date,
-            decisionBy: data.decision_by,
-            notes: data.notes,
-            workShift: data.work_shift,
-            exclusionReason: data.exclusion_reason,
-            resignationReason: data.resignation_reason,
-            isRejectedBefore: data.is_rejected_before,
-            previousRejectionDate: data.previous_rejection_date,
-            createdAt: data.created_at
-          }
-          
-          set(state => ({
-            savedCandidates: [...state.savedCandidates, transformedData]
-          }))
-
-          successCount++
-        } catch (error) {
-          errors.push(`خطأ في إضافة ${candidateData.name}: ${error}`)
+      // تصفية المرشحين المكررين
+      const candidatesToAdd: Omit<SavedCandidate, 'id' | 'createdAt'>[] = []
+      
+      candidates.forEach((candidateData) => {
+        // فحص التكرار داخل الملف
+        if ((nationalIdCounts.get(candidateData.nationalId) || 0) > 1) {
+          errors.push(`المرشح المحفوظ ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) مكرر داخل الملف`)
           failedCount++
+          return
+        }
+
+        // فحص التكرار من قاعدة البيانات أو الحالة المحلية
+        if (existingNationalIdsInDB.has(candidateData.nationalId) || existingNationalIdsLocal.has(candidateData.nationalId)) {
+          errors.push(`المرشح المحفوظ ${candidateData.name} (الرقم القومي: ${candidateData.nationalId}) موجود مسبقاً في النظام`)
+          failedCount++
+          return
+        }
+
+        candidatesToAdd.push(candidateData)
+      })
+
+      // إعداد البيانات للإدراج الجماعي
+      const candidatesToInsert = candidatesToAdd.map(candidateData => ({
+        name: candidateData.name,
+        national_id: candidateData.nationalId,
+        birth_date: candidateData.birthDate,
+        governorate: candidateData.governorate,
+        qualification: candidateData.qualification,
+        marital_status: candidateData.maritalStatus,
+        security_company: candidateData.securityCompany,
+        position: candidateData.position || null,
+        offer_date: candidateData.offerDate,
+        final_result: candidateData.finalResult,
+        decision_date: candidateData.decisionDate,
+        decision_by: candidateData.decisionBy,
+        notes: candidateData.notes || null,
+        work_shift: candidateData.workShift || null,
+        exclusion_reason: candidateData.exclusionReason || null,
+        resignation_reason: candidateData.resignationReason || null,
+        is_rejected_before: candidateData.isRejectedBefore,
+        previous_rejection_date: candidateData.previousRejectionDate || null
+      }))
+
+      // إدراج جميع المرشحين المحفوظين دفعة واحدة
+      if (candidatesToInsert.length > 0) {
+        const { data: insertedData, error: insertError } = await supabase
+          .from('saved_candidates')
+          .insert(candidatesToInsert)
+          .select()
+
+        if (insertError) {
+          // إذا فشل الإدراج الجماعي، حاول إدراجهم واحداً تلو الآخر
+          console.warn('فشل الإدراج الجماعي للمرشحين المحفوظين، جاري المحاولة واحداً تلو الآخر:', insertError)
+          for (const candidateData of candidatesToAdd) {
+            try {
+              const { data, error } = await supabase
+                .from('saved_candidates')
+                .insert([{
+                  name: candidateData.name,
+                  national_id: candidateData.nationalId,
+                  birth_date: candidateData.birthDate,
+                  governorate: candidateData.governorate,
+                  qualification: candidateData.qualification,
+                  marital_status: candidateData.maritalStatus,
+                  security_company: candidateData.securityCompany,
+                  position: candidateData.position || null,
+                  offer_date: candidateData.offerDate,
+                  final_result: candidateData.finalResult,
+                  decision_date: candidateData.decisionDate,
+                  decision_by: candidateData.decisionBy,
+                  notes: candidateData.notes || null,
+                  work_shift: candidateData.workShift || null,
+                  exclusion_reason: candidateData.exclusionReason || null,
+                  resignation_reason: candidateData.resignationReason || null,
+                  is_rejected_before: candidateData.isRejectedBefore,
+                  previous_rejection_date: candidateData.previousRejectionDate || null
+                }])
+                .select()
+                .single()
+
+              if (error) {
+                errors.push(`خطأ في إضافة ${candidateData.name}: ${error.message}`)
+                failedCount++
+                continue
+              }
+
+              // تحديث الحالة المحلية
+              const transformedData: SavedCandidate = {
+                id: data.id,
+                name: data.name,
+                nationalId: data.national_id,
+                birthDate: data.birth_date,
+                governorate: data.governorate,
+                qualification: data.qualification,
+                maritalStatus: data.marital_status,
+                securityCompany: data.security_company,
+                position: data.position,
+                offerDate: data.offer_date,
+                finalResult: data.final_result,
+                decisionDate: data.decision_date,
+                decisionBy: data.decision_by,
+                notes: data.notes,
+                workShift: data.work_shift,
+                exclusionReason: data.exclusion_reason,
+                resignationReason: data.resignation_reason,
+                isRejectedBefore: data.is_rejected_before,
+                previousRejectionDate: data.previous_rejection_date,
+                createdAt: data.created_at
+              }
+              
+              set(state => ({
+                savedCandidates: [...state.savedCandidates, transformedData]
+              }))
+
+              successCount++
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error)
+              errors.push(`خطأ في إضافة ${candidateData.name}: ${errorMessage}`)
+              failedCount++
+            }
+          }
+        } else {
+          // نجح الإدراج الجماعي
+          successCount = insertedData?.length || 0
+          
+          // تحديث الحالة المحلية
+          if (insertedData) {
+            const transformedCandidates: SavedCandidate[] = insertedData.map(data => ({
+              id: data.id,
+              name: data.name,
+              nationalId: data.national_id,
+              birthDate: data.birth_date,
+              governorate: data.governorate,
+              qualification: data.qualification,
+              maritalStatus: data.marital_status as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
+              securityCompany: data.security_company,
+              position: data.position || undefined,
+              offerDate: data.offer_date,
+              finalResult: data.final_result as 'مقبول' | 'مرفوض' | 'مستبعد',
+              decisionDate: data.decision_date,
+              decisionBy: data.decision_by,
+              notes: data.notes || undefined,
+              workShift: data.work_shift as 'نهار' | 'ليل' | undefined,
+              exclusionReason: data.exclusion_reason || undefined,
+              resignationReason: data.resignation_reason || undefined,
+              isRejectedBefore: data.is_rejected_before,
+              previousRejectionDate: data.previous_rejection_date || undefined,
+              createdAt: data.created_at
+            }))
+
+            set(state => ({
+              savedCandidates: [...state.savedCandidates, ...transformedCandidates]
+            }))
+          }
         }
       }
 
