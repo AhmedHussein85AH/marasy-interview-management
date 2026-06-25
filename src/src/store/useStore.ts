@@ -1096,9 +1096,6 @@ export const useStore = create<AppState>()(
       // تحميل البيانات من Supabase
       loadDataFromSupabase: async () => {
         try {
-          console.log('تحميل البيانات من Supabase...')
-          console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL)
-          console.log('Supabase Key:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing')
 
           // تحميل المرشحين
           const { data: candidates, error: candidatesError } = await supabase
