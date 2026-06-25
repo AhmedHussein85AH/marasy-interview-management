@@ -1,17 +1,23 @@
--- إضافة حقل is_active إلى جدول users
--- هذا التحديث آمن: جميع المستخدمين الحاليين سيصبحون نشطين تلقائياً
+-- =============================================
+-- إدارة حالة المستخدمين - نظام مراسي
+-- =============================================
 
-ALTER TABLE users 
-ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+-- تفعيل مستخدم
+UPDATE users SET is_active = TRUE WHERE email = 'user@company.com';
 
--- تحديث جميع المستخدمين الحاليين ليكونوا نشطين (في حالة عدم وجود القيمة)
-UPDATE users 
-SET is_active = TRUE 
-WHERE is_active IS NULL;
+-- تعطيل مستخدم
+UPDATE users SET is_active = FALSE WHERE email = 'user@company.com';
 
--- إضافة فهرس لتحسين الأداء
-CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+-- عرض كل المستخدمين وحالتهم
+SELECT id, name, email, user_type, department, is_active, created_at
+FROM users
+ORDER BY created_at DESC;
 
--- إضافة فهرس مركب للبحث السريع
-CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
+-- عرض المستخدمين المعطلين
+SELECT name, email, user_type FROM users WHERE is_active = FALSE;
 
+-- تغيير دور مستخدم
+UPDATE users SET user_type = 'interview_manager' WHERE email = 'user@company.com';
+
+-- إعادة تعيين الصلاحيات المخصصة (رجوع للافتراضي)
+UPDATE users SET permissions = NULL WHERE email = 'user@company.com';

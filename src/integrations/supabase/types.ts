@@ -40,6 +40,8 @@ export interface Database {
           qualification: string
           marital_status: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
           security_company: string
+          position?: string | null
+          phone?: string | null
           offer_date: string
           offer_result: 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
           status: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'
@@ -58,6 +60,8 @@ export interface Database {
           qualification: string
           marital_status: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
           security_company: string
+          position?: string | null
+          phone?: string | null
           offer_date: string
           offer_result?: 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
           status?: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'
@@ -76,6 +80,8 @@ export interface Database {
           qualification?: string
           marital_status?: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
           security_company?: string
+          position?: string | null
+          phone?: string | null
           offer_date?: string
           offer_result?: 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
           status?: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'

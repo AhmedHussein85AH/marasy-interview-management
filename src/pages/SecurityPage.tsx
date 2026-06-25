@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { Monitor, Smartphone, Globe, Clock, Shield, AlertTriangle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 const SecurityPage: React.FC = () => {
+  const { t } = useTranslation()
   const { currentUser, loginLogs, loadLoginLogs, getActiveSessions } = useStore()
   const [selectedLog, setSelectedLog] = useState<string | null>(null)
   const [filterEmail, setFilterEmail] = useState('')
@@ -41,12 +43,12 @@ const SecurityPage: React.FC = () => {
   const getDuration = (loginTime: string, logoutTime?: string) => {
     const login = new Date(loginTime)
     const logout = logoutTime ? new Date(logoutTime) : new Date()
-    const diff = Math.floor((logout.getTime() - login.getTime()) / 1000 / 60) // بالدقائق
+    const diff = Math.floor((logout.getTime() - login.getTime()) / 1000 / 60)
     
-    if (diff < 60) return `${diff} دقيقة`
+    if (diff < 60) return t('security.minute', '{{count}} دقيقة', { count: diff })
     const hours = Math.floor(diff / 60)
     const minutes = diff % 60
-    return `${hours} ساعة ${minutes} دقيقة`
+    return t('security.hourMinute', '{{hours}} ساعة {{minutes}} دقيقة', { hours, minutes })
   }
 
   return (
@@ -61,7 +63,7 @@ const SecurityPage: React.FC = () => {
         }}>
           <h2 style={{ color: '#2c3e50', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Shield className="h-6 w-6" />
-            مراقبة الأمان والأنشطة
+            {t('security.title', 'مراقبة الأمان والأنشطة')}
           </h2>
 
           {/* إحصائيات */}
@@ -70,25 +72,25 @@ const SecurityPage: React.FC = () => {
               <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2980b9' }}>
                 {loginLogs.length}
               </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>إجمالي تسجيلات الدخول</div>
+              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.totalLogins', 'إجمالي تسجيلات الدخول')}</div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#d4edda', borderRadius: '8px' }}>
               <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
                 {activeSessions.length}
               </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>جلسات نشطة</div>
+              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.activeSessions', 'جلسات نشطة')}</div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '8px' }}>
               <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f39c12' }}>
                 {new Set(loginLogs.map(log => log.userEmail)).size}
               </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>مستخدمين نشطين</div>
+              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.activeUsers', 'مستخدمين نشطين')}</div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#f8d7da', borderRadius: '8px' }}>
               <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#e74c3c' }}>
                 {new Set(loginLogs.filter(log => log.country && log.country !== 'غير معروف').map(log => log.country)).size}
               </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>دول مختلفة</div>
+              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.differentCountries', 'دول مختلفة')}</div>
             </div>
           </div>
 
@@ -96,7 +98,7 @@ const SecurityPage: React.FC = () => {
           <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
             <input
               type="text"
-              placeholder="البحث بالبريد الإلكتروني..."
+              placeholder={t('security.searchByEmail', 'البحث بالبريد الإلكتروني...')}
               value={filterEmail}
               onChange={(e) => setFilterEmail(e.target.value)}
               style={{
@@ -110,16 +112,16 @@ const SecurityPage: React.FC = () => {
             <select
               value={filterActive}
               onChange={(e) => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}
-              title="فلترة حسب حالة الجلسة"
+              title={t('security.status', 'الحالة')}
               style={{
                 padding: '10px',
                 border: '1px solid #ddd',
                 borderRadius: '5px'
               }}
             >
-              <option value="all">جميع الجلسات</option>
-              <option value="active">نشطة فقط</option>
-              <option value="inactive">منتهية فقط</option>
+              <option value="all">{t('security.allSessions', 'جميع الجلسات')}</option>
+              <option value="active">{t('security.activeOnly', 'نشطة فقط')}</option>
+              <option value="inactive">{t('security.inactiveOnly', 'منتهية فقط')}</option>
             </select>
           </div>
 
@@ -128,18 +130,19 @@ const SecurityPage: React.FC = () => {
             maxHeight: '600px',
             overflowY: 'auto',
             border: '1px solid #ddd',
-            borderRadius: '5px'
+            borderRadius: '5px',
+            direction: 'rtl'
           }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
                 <tr>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المستخدم</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الجهاز</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الموقع</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>وقت الدخول</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المدة</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الحالة</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>تفاصيل</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.user', 'المستخدم')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.device', 'الجهاز')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.location', 'الموقع')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.loginTime', 'وقت الدخول')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.duration', 'المدة')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.status', 'الحالة')}</th>
+                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.details', 'تفاصيل')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -156,20 +159,13 @@ const SecurityPage: React.FC = () => {
                     <td style={{ padding: '12px' }}>
                       <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
                         {log.userName}
-                        {(() => {
-                          const accountUser = users.find(u => u.email === log.userEmail)
-                          if (accountUser?.isActive === false) {
-                            return <span style={{ fontSize: '10px', color: '#e74c3c', fontWeight: 'normal' }}>(معطل)</span>
-                          }
-                          return null
-                        })()}
                       </div>
                       <div style={{ fontSize: '12px', color: '#7f8c8d' }}>{log.userEmail}</div>
                     </td>
                     <td style={{ padding: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         {getDeviceIcon(log.deviceType)}
-                        <span>{log.deviceType || 'غير معروف'}</span>
+                        <span>{log.deviceType || t('security.unknown', 'غير معروف')}</span>
                       </div>
                       <div style={{ fontSize: '12px', color: '#7f8c8d' }}>
                         {log.browser} - {log.os}
@@ -178,7 +174,7 @@ const SecurityPage: React.FC = () => {
                     <td style={{ padding: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <Globe className="h-4 w-4" />
-                        <span>{log.city || 'غير معروف'}, {log.country || 'غير معروف'}</span>
+                        <span>{log.city || t('security.unknown', 'غير معروف')}, {log.country || t('security.unknown', 'غير معروف')}</span>
                       </div>
                       {log.latitude && log.longitude && (
                         <div style={{ fontSize: '12px', color: '#7f8c8d' }}>
@@ -203,7 +199,7 @@ const SecurityPage: React.FC = () => {
                         backgroundColor: log.isActive ? '#d4edda' : '#f8d7da',
                         color: log.isActive ? '#155724' : '#721c24'
                       }}>
-                        {log.isActive ? 'نشط' : 'منتهي'}
+                        {log.isActive ? t('security.active', 'نشط') : t('security.ended', 'منتهي')}
                       </span>
                     </td>
                     <td style={{ padding: '12px' }}>
@@ -218,7 +214,7 @@ const SecurityPage: React.FC = () => {
                           fontSize: '12px'
                         }}
                       >
-                        عرض التفاصيل
+                        {t('security.viewDetails', 'عرض التفاصيل')}
                       </button>
                     </td>
                   </tr>
@@ -241,45 +237,45 @@ const SecurityPage: React.FC = () => {
                 if (!log) return null
                 return (
                   <div>
-                    <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>تفاصيل الجلسة</h3>
+                    <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>{t('security.sessionDetails', 'تفاصيل الجلسة')}</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
                       <div>
-                        <strong>المستخدم:</strong> {log.userName} ({log.userEmail})
+                        <strong>{t('security.user')}:</strong> {log.userName} ({log.userEmail})
                       </div>
                       <div>
-                        <strong>IP Address:</strong> {log.ipAddress || 'غير معروف'}
+                        <strong>{t('security.ipAddress')}:</strong> {log.ipAddress || t('security.unknown')}
                       </div>
                       <div>
-                        <strong>الجهاز:</strong> {log.deviceType || 'غير معروف'}
+                        <strong>{t('security.device')}:</strong> {log.deviceType || t('security.unknown')}
                       </div>
                       <div>
-                        <strong>المتصفح:</strong> {log.browser || 'غير معروف'}
+                        <strong>{t('security.browser')}:</strong> {log.browser || t('security.unknown')}
                       </div>
                       <div>
-                        <strong>نظام التشغيل:</strong> {log.os || 'غير معروف'}
+                        <strong>{t('security.os')}:</strong> {log.os || t('security.unknown')}
                       </div>
                       <div>
-                        <strong>البلد:</strong> {log.country || 'غير معروف'}
+                        <strong>{t('security.country')}:</strong> {log.country || t('security.unknown')}
                       </div>
                       <div>
-                        <strong>المدينة:</strong> {log.city || 'غير معروف'}
+                        <strong>{t('security.city')}:</strong> {log.city || t('security.unknown')}
                       </div>
                       <div>
-                        <strong>وقت الدخول:</strong> {formatDate(log.loginTime)}
+                        <strong>{t('security.loginTime')}:</strong> {formatDate(log.loginTime)}
                       </div>
                       {log.logoutTime && (
                         <div>
-                          <strong>وقت الخروج:</strong> {formatDate(log.logoutTime)}
+                          <strong>{t('security.logoutTime')}:</strong> {formatDate(log.logoutTime)}
                         </div>
                       )}
                       <div>
-                        <strong>المدة:</strong> {getDuration(log.loginTime, log.logoutTime)}
+                        <strong>{t('security.duration')}:</strong> {getDuration(log.loginTime, log.logoutTime)}
                       </div>
                       <div>
-                        <strong>Session ID:</strong> <code style={{ fontSize: '12px' }}>{log.sessionId}</code>
+                        <strong>{t('security.sessionId')}:</strong> <code style={{ fontSize: '12px' }}>{log.sessionId}</code>
                       </div>
                       <div style={{ gridColumn: '1 / -1' }}>
-                        <strong>User Agent:</strong>
+                        <strong>{t('security.userAgent')}:</strong>
                         <div style={{
                           padding: '10px',
                           backgroundColor: 'white',
@@ -289,7 +285,7 @@ const SecurityPage: React.FC = () => {
                           wordBreak: 'break-all',
                           marginTop: '5px'
                         }}>
-                          {log.userAgent || 'غير معروف'}
+                          {log.userAgent || t('security.unknown')}
                         </div>
                       </div>
                     </div>
@@ -302,7 +298,7 @@ const SecurityPage: React.FC = () => {
           {filteredLogs.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px', color: '#7f8c8d' }}>
               <AlertTriangle className="h-12 w-12" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
-              <p>لا توجد سجلات دخول</p>
+              <p>{t('security.noLogs', 'لا توجد سجلات دخول')}</p>
             </div>
           )}
         </div>

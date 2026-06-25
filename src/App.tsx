@@ -6,7 +6,6 @@ import Layout from './components/Layout'
 import ProtectedLayout from './components/ProtectedLayout'
 import DashboardPage from './pages/DashboardPage'
 import CandidatesPage from './pages/CandidatesPage'
-import InterviewsPage from './pages/InterviewsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import DatabasePage from './pages/DatabasePage'
 import SettingsPage from './pages/SettingsPage'
@@ -53,11 +52,6 @@ const App: React.FC = () => {
           <Route path="/candidates" element={
             <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
               <CandidatesPage />
-            </ProtectedLayout>
-          } />
-          <Route path="/interviews" element={
-            <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
-              <InterviewsPage />
             </ProtectedLayout>
           } />
           <Route path="/analytics" element={

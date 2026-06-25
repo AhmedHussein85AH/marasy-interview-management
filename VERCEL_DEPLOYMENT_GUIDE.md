@@ -1,81 +1,61 @@
-# دليل نشر المشروع على Vercel مع Supabase
+# دليل النشر على Vercel - نظام مراسي
 
-## المشكلة الشائعة
-عند نشر تطبيق React/Vite مع Supabase على Vercel، قد تواجه خطأ:
-```
-❌ Missing environment variables!
-Uncaught Error: Missing Supabase environment variables!
-```
+## المتطلبات
+- حساب [Vercel](https://vercel.com)
+- مشروع Supabase جاهز
+- الكود على GitHub/GitLab
 
-## السبب
-متغيرات البيئة من ملف `.env` لا تُحمّل تلقائياً في Vercel. يجب إضافتها يدوياً في إعدادات Vercel.
+## خطوات النشر
 
-## الحل
-
-### الخطوة 1: إضافة متغيرات البيئة في Vercel
-
-1. **ادخل إلى Vercel Dashboard:**
-   - اذهب إلى: https://vercel.com/dashboard
-   - اختر مشروعك
-
-2. **اذهب إلى إعدادات المتغيرات:**
-   - Settings → Environment Variables
-
-3. **أضف المتغيرات التالية:**
-
-```
-Name: VITE_SUPABASE_URL
-Value: https://your-project.supabase.co
-Environment: Production, Preview, Development
-
-Name: VITE_SUPABASE_ANON_KEY
-Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-Environment: Production, Preview, Development
-
-Name: VITE_SECURITY_EMPLOYEE_PASSWORD
-Value: Sec@135$
-Environment: Production, Preview, Development
-
-Name: VITE_INTERVIEW_MANAGER_PASSWORD
-Value: Man@135$
-Environment: Production, Preview, Development
-
-Name: VITE_ADMIN_PASSWORD
-Value: Adm@135$
-Environment: Production, Preview, Development
+### 1. ربط المشروع بـ Vercel
+```bash
+# أو من خلال vercel.com/new
+vercel
 ```
 
-### الخطوة 2: إعادة النشر
+### 2. إعداد متغيرات البيئة في Vercel
+في **Project Settings → Environment Variables** أضف:
 
-1. **اذهب إلى Deployments**
-2. **اضغط على Redeploy للمشروع الأخير**
+```
+VITE_SUPABASE_URL        = https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY   = eyJhbGc...
+VITE_ALLOW_DEMO_LOGIN    = false
+```
 
-## ملاحظات مهمة
+### 3. إعدادات البناء
+ملف `vercel.json` موجود بالفعل في المشروع:
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
+}
+```
 
-- **VITE_ prefix:** جميع المتغيرات يجب أن تبدأ بـ `VITE_` لتعمل في Vite
-- **Environment Selection:** تأكد من تحديد Production و Preview و Development
-- **Redeploy Required:** يجب إعادة النشر بعد إضافة المتغيرات
-- **Security:** لا تشارك مفاتيح Supabase أو كلمات المرور
-
-## استكشاف الأخطاء
-
-### إذا لم تعمل المتغيرات:
-1. تأكد من أن أسماء المتغيرات مطابقة تماماً
-2. تأكد من إعادة النشر بعد إضافة المتغيرات
-3. تحقق من Console في المتصفح للأخطاء
-
-### إذا كان Supabase لا يعمل:
-1. تأكد من صحة URL و Anon Key
-2. تأكد من إنشاء الجداول في Supabase
-3. تحقق من إعدادات RLS في Supabase
-
-## ملفات مهمة في المشروع
-
-- `.env` - متغيرات البيئة المحلية
-- `env.example` - مثال على المتغيرات المطلوبة
-- `supabase_schema.sql` - مخطط قاعدة البيانات
-- `SUPABASE_SETUP.md` - دليل إعداد Supabase
+### 4. النشر
+```bash
+git add .
+git commit -m "your message"
+git push
+```
+Vercel يـ deploy تلقائياً عند كل push.
 
 ---
 
-**تم إنشاء هذا الدليل لحل مشكلة نشر تطبيق إدارة المقابلات على Vercel مع Supabase**
+## تحديث المشروع
+
+```bash
+git add .
+git commit -m "feat: description of changes"
+git push origin main
+```
+
+---
+
+## مشاكل شائعة
+
+**صفحة بيضاء بعد النشر:**
+- تأكد من وجود `vercel.json` مع الـ rewrites
+- تأكد من صحة متغيرات البيئة
+
+**خطأ في تسجيل الدخول:**
+- تأكد من `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY`
+- تأكد إن المستخدم موجود في Supabase Auth

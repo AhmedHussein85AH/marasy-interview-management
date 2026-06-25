@@ -1,56 +1,32 @@
--- جدول سجلات تسجيل الدخول
-CREATE TABLE IF NOT EXISTS login_logs (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  user_email TEXT NOT NULL,
-  user_name TEXT NOT NULL,
-  login_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  logout_time TIMESTAMP WITH TIME ZONE,
-  ip_address TEXT,
-  user_agent TEXT,
-  device_type TEXT,
-  browser TEXT,
-  os TEXT,
-  country TEXT,
-  city TEXT,
-  latitude DECIMAL(10, 8),
-  longitude DECIMAL(11, 8),
-  is_active BOOLEAN DEFAULT TRUE,
-  session_id TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- =============================================
+-- سجلات تسجيل الدخول - نظام مراسي
+-- =============================================
 
--- فهارس لتحسين الأداء
-CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON login_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_login_logs_user_email ON login_logs(user_email);
-CREATE INDEX IF NOT EXISTS idx_login_logs_login_time ON login_logs(login_time);
-CREATE INDEX IF NOT EXISTS idx_login_logs_is_active ON login_logs(is_active);
-CREATE INDEX IF NOT EXISTS idx_login_logs_session_id ON login_logs(session_id);
+-- عرض آخر 50 تسجيل دخول
+SELECT user_name, user_email, login_time, logout_time,
+       ip_address, browser, os, country, city, is_active
+FROM login_logs
+ORDER BY login_time DESC
+LIMIT 50;
 
--- تمكين Row Level Security
-ALTER TABLE login_logs ENABLE ROW LEVEL SECURITY;
+-- عرض الجلسات النشطة حالياً
+SELECT user_name, user_email, login_time, ip_address, browser
+FROM login_logs
+WHERE is_active = TRUE
+ORDER BY login_time DESC;
 
--- سياسة الأمان - الأدمن فقط يمكنه رؤية جميع السجلات
-DROP POLICY IF EXISTS "Admins can view all login logs" ON login_logs;
-CREATE POLICY "Admins can view all login logs" ON login_logs
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM users
-      WHERE users.id = auth.uid()
-      AND users.user_type = 'admin'
-    )
-  );
+-- عرض إحصائيات تسجيل الدخول
+SELECT user_email, COUNT(*) as login_count,
+       MAX(login_time) as last_login
+FROM login_logs
+GROUP BY user_email
+ORDER BY login_count DESC;
 
--- السماح للجميع بإضافة سجلات الدخول الخاصة بهم
-DROP POLICY IF EXISTS "Users can insert their own login logs" ON login_logs;
-CREATE POLICY "Users can insert their own login logs" ON login_logs
-  FOR INSERT
-  WITH CHECK (true);
+-- حذف السجلات القديمة (أكثر من 90 يوم)
+DELETE FROM login_logs
+WHERE login_time < NOW() - INTERVAL '90 days';
 
--- السماح بتحديث سجلات الدخول (للتسجيل الخروج)
-DROP POLICY IF EXISTS "Users can update their own login logs" ON login_logs;
-CREATE POLICY "Users can update their own login logs" ON login_logs
-  FOR UPDATE
-  USING (true);
-
+-- إنهاء جلسة معينة
+UPDATE login_logs
+SET is_active = FALSE, logout_time = NOW()
+WHERE session_id = 'session_id_here';

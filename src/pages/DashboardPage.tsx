@@ -1,23 +1,18 @@
 import React from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
+import { Users, UserCheck, CalendarClock, CalendarCheck2, TrendingUp } from 'lucide-react'
+
+import { useTranslation } from 'react-i18next'
 
 const DashboardPage: React.FC = () => {
-  const { currentUser, candidates, interviews, stats, getUnreadNotifications } = useStore()
+  const { currentUser, candidates, interviews, getUnreadNotifications } = useStore()
+  const { t } = useTranslation()
 
   const getWelcomeMessage = () => {
-    if (!currentUser) return 'مرحباً'
-    
-    switch (currentUser.userType) {
-      case 'security_employee':
-        return `مرحباً ${currentUser.name.split(' - ')[0]}`
-      case 'interview_manager':
-        return `مرحباً ${currentUser.name.split(' - ')[0]}`
-      case 'admin':
-        return `مرحباً ${currentUser.name.split(' - ')[0]}`
-      default:
-        return 'مرحباً'
-    }
+    const welcome = t('dashboard.welcome')
+    if (!currentUser) return welcome
+    return `${welcome} ${currentUser.name.split(' - ')[0]}`
   }
 
   const getUserRole = () => {
@@ -25,11 +20,11 @@ const DashboardPage: React.FC = () => {
     
     switch (currentUser.userType) {
       case 'security_employee':
-        return 'موظف شركة الأمن'
+        return t('dashboard.roles.security_employee')
       case 'interview_manager':
-        return 'مسئول المقابلات'
+        return t('dashboard.roles.interview_manager')
       case 'admin':
-        return 'مدير النظام'
+        return t('dashboard.roles.admin')
       default:
         return ''
     }
@@ -53,225 +48,141 @@ const DashboardPage: React.FC = () => {
 
   const unreadNotifications = getUnreadNotifications()
 
+  const stats = [
+    { label: t('dashboard.stats.totalCandidates'),  value: candidates.length,        icon: Users,           color: 'blue' },
+    { label: t('dashboard.stats.newCandidates'),       value: getNewCandidates(),        icon: UserCheck,       color: 'green' },
+    { label: t('dashboard.stats.pendingInterviews'),   value: getPendingInterviews(),    icon: CalendarClock,   color: 'orange' },
+    { label: t('dashboard.stats.completedInterviews'),   value: getCompletedInterviews(),  icon: CalendarCheck2,  color: 'purple' },
+    { label: t('dashboard.stats.hiredCandidates'),   value: getHiredCandidates(),      icon: TrendingUp,      color: 'green' },
+  ]
+
+  const getStatusBadge = (result: string) => {
+    const map: Record<string, string> = {
+      'مقبول':     'badge badge-success',
+      'مرفوض':     'badge badge-danger',
+      'مستبعد':    'badge badge-warning',
+      'في انتظار': 'badge badge-info',
+    }
+    return map[result] || 'badge badge-muted'
+  }
+
+  const getStatusTranslation = (result: string) => {
+    const map: Record<string, string> = {
+      'مقبول':     t('status.accepted'),
+      'مرفوض':     t('status.rejected'),
+      'مستبعد':    t('status.excluded'),
+      'في انتظار': t('status.pending'),
+      'جديد':      t('status.new')
+    }
+    return map[result] || result
+  }
+
   return (
     <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
-      <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
-        {/* ترحيب */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          marginBottom: '20px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <h1 style={{ color: '#2c3e50', margin: '0 0 10px 0' }}>
-            {getWelcomeMessage()}
-          </h1>
-          <p style={{ color: '#7f8c8d', margin: 0, fontSize: '16px' }}>
-            {getUserRole()} - {currentUser?.department}
+      <div className="page-wrapper" style={{ direction: 'inherit' }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: '28px' }}>
+          <h1 className="page-title">{getWelcomeMessage()}</h1>
+          <p className="page-subtitle">
+            {getUserRole()}
+            {currentUser?.department ? ` · ${currentUser.department}` : ''}
             {unreadNotifications.length > 0 && (
-              <span style={{
-                color: '#e74c3c',
-                marginLeft: '10px',
-                fontWeight: 'bold'
-              }}>
-                ({unreadNotifications.length} إشعار جديد)
+              <span style={{ color: 'hsl(4 86% 55%)', fontWeight: 600, marginInlineStart: '8px' }}>
+                · {unreadNotifications.length} {t('dashboard.newNotification')}
               </span>
             )}
           </p>
         </div>
 
-        {/* الإحصائيات */}
+        {/* Stat cards */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '20px',
-          marginBottom: '20px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
+          marginBottom: '28px'
         }}>
-          {/* إجمالي المرشحين */}
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 'bold',
-              color: '#3498db',
-              marginBottom: '10px'
-            }}>
-              {candidates.length}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '16px', fontWeight: 'bold' }}>
-              إجمالي المرشحين
-            </div>
-          </div>
-
-          {/* المرشحين الجدد */}
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 'bold',
-              color: '#2ecc71',
-              marginBottom: '10px'
-            }}>
-              {getNewCandidates()}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '16px', fontWeight: 'bold' }}>
-              مرشحين جدد
-            </div>
-          </div>
-
-          {/* المقابلات المجدولة */}
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 'bold',
-              color: '#f39c12',
-              marginBottom: '10px'
-            }}>
-              {getPendingInterviews()}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '16px', fontWeight: 'bold' }}>
-              مقابلات مجدولة
-            </div>
-          </div>
-
-          {/* المقابلات المكتملة */}
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 'bold',
-              color: '#9b59b6',
-              marginBottom: '10px'
-            }}>
-              {getCompletedInterviews()}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '16px', fontWeight: 'bold' }}>
-              مقابلات مكتملة
-            </div>
-          </div>
-
-          {/* المرشحين المقبولين */}
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 'bold',
-              color: '#27ae60',
-              marginBottom: '10px'
-            }}>
-              {getHiredCandidates()}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '16px', fontWeight: 'bold' }}>
-              مرشحين مقبولين
-            </div>
-          </div>
+          {stats.map((s) => {
+            const Icon = s.icon
+            return (
+              <div key={s.label} className={`stat-card ${s.color}`}>
+                <div className="stat-icon">
+                  <Icon size={20} />
+                </div>
+                <div className="stat-value">{s.value}</div>
+                <div className="stat-label">{s.label}</div>
+              </div>
+            )
+          })}
         </div>
 
-        {/* النشاط الأخير */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ color: '#2c3e50', marginBottom: '20px' }}>
-            النشاط الأخير
-          </h3>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            {candidates.slice(-5).map(candidate => (
-              <div key={candidate.id} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '15px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                border: '1px solid #e9ecef'
-              }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', color: '#2c3e50' }}>
-                    {candidate.name}
+        {/* Bottom row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+          {/* Recent activity */}
+          <div className="section-card">
+            <div className="section-card-header">
+              <h3>{t('dashboard.recentActivity.title')}</h3>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{t('dashboard.recentActivity.subtitle')}</span>
+            </div>
+            <div className="section-card-body" style={{ padding: '8px 0' }}>
+              {candidates.slice(-5).reverse().map(candidate => (
+                <div key={candidate.id} className="activity-item">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '34px', height: '34px',
+                      background: 'hsl(var(--muted))',
+                      borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '13px', fontWeight: 700, color: 'hsl(var(--primary))',
+                      flexShrink: 0
+                    }}>
+                      {candidate.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                        {candidate.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
+                        {candidate.governorate} · {candidate.qualification}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ color: '#7f8c8d', fontSize: '14px' }}>
-                    {candidate.governorate} - {candidate.qualification}
-                  </div>
-                </div>
-                <div>
-                  <span style={{
-                    backgroundColor: candidate.offerResult === 'مقبول' ? '#2ecc71' : 
-                                   candidate.offerResult === 'مرفوض' ? '#e74c3c' : 
-                                   candidate.offerResult === 'مستبعد' ? '#f39c12' : '#3498db',
-                    color: 'white',
-                    padding: '5px 10px',
-                    borderRadius: '15px',
-                    fontSize: '12px'
-                  }}>
-                    {candidate.offerResult}
+                  <span className={getStatusBadge(candidate.offerResult)}>
+                    {getStatusTranslation(candidate.offerResult)}
                   </span>
                 </div>
-              </div>
-            ))}
+              ))}
+              {candidates.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '24px', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>
+                  {t('dashboard.recentActivity.noActivity')}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* معلومات المستخدم */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          marginTop: '20px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{ color: '#2c3e50', marginBottom: '15px' }}>
-            معلومات المستخدم
-          </h3>
-          
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '15px'
-          }}>
-            <div>
-              <strong>الاسم:</strong> {currentUser?.name}
+          {/* User info */}
+          <div className="section-card">
+            <div className="section-card-header">
+              <h3>{t('dashboard.accountInfo.title')}</h3>
             </div>
-            <div>
-              <strong>البريد الإلكتروني:</strong> {currentUser?.email}
-            </div>
-            <div>
-              <strong>القسم:</strong> {currentUser?.department}
-            </div>
-            <div>
-              <strong>نوع المستخدم:</strong> {getUserRole()}
+            <div className="section-card-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {[
+                  { label: t('dashboard.accountInfo.name'),             value: currentUser?.name },
+                  { label: t('dashboard.accountInfo.email'), value: currentUser?.email },
+                  { label: t('dashboard.accountInfo.department'),             value: currentUser?.department },
+                  { label: t('dashboard.accountInfo.role'),          value: getUserRole() },
+                ].map(row => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', color: 'hsl(var(--muted-foreground))', fontWeight: 500 }}>{row.label}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
+
         </div>
       </div>
     </ProtectedLayout>

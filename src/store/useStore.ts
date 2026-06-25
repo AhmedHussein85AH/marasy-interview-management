@@ -15,7 +15,8 @@ export interface User {
   userType: UserType
   department: string
   createdAt: string
-  isActive?: boolean // حالة الحساب: نشط/معطل
+  isActive?: boolean
+  permissions?: import('./types/permissions').UserPermissions
 }
 
 // واجهة المرشح
@@ -29,6 +30,7 @@ export interface Candidate {
   maritalStatus: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
   securityCompany: string
   position?: string
+  phone?: string
   offerDate: string
   offerResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
   status: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'
@@ -155,6 +157,7 @@ export interface AppState {
   loginWithSupabase: (email: string) => Promise<boolean>
   addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void
   updateCandidateStatus: (id: string, status: Candidate['status'], offerResult: Candidate['offerResult'], notes?: string, workShift?: 'نهار' | 'ليل') => void
+  updateCandidate: (id: string, data: Partial<Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'offerResult'>>) => Promise<void>
   deleteCandidate: (id: string) => void
   saveCandidateToDatabase: (candidate: Candidate, finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة', notes?: string, workShift?: 'نهار' | 'ليل', exclusionReason?: string, resignationReason?: string) => Promise<void>
   addInterview: (interview: Omit<Interview, 'id' | 'createdAt' | 'updatedAt'>) => void
@@ -182,10 +185,11 @@ export interface AppState {
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
   // إدارة المستخدمين من Supabase
   loadUsersFromSupabase: () => Promise<void>
-  addUserToSupabase: (user: { name: string; email: string; userType: UserType; department: string }) => Promise<void>
+  addUserToSupabase: (user: { name: string; email: string; password: string; userType: UserType; department: string }) => Promise<void>
   updateUserRoleInSupabase: (id: string, userType: UserType) => Promise<void>
   deleteUserFromSupabase: (id: string) => Promise<void>
   toggleUserStatus: (id: string, isActive: boolean) => Promise<void>
+  updateUserPermissions: (id: string, permissions: import('./types/permissions').UserPermissions) => Promise<void>
   // إعداد الاشتراكات التلقائية
   setupRealtimeSubscriptions: () => void
   cleanupRealtimeSubscriptions: () => void
@@ -332,7 +336,8 @@ export const useStore = create<AppState>()(
             userType: data.user_type as UserType,
             department: data.department,
             createdAt: data.created_at,
-            isActive: data.is_active ?? true
+            isActive: data.is_active ?? true,
+            permissions: (data as any).permissions || undefined,
           }
 
           set({ currentUser: mappedUser })
@@ -434,6 +439,7 @@ export const useStore = create<AppState>()(
             marital_status: candidateData.maritalStatus,
             security_company: candidateData.securityCompany,
             position: candidateData.position || null,
+            phone: candidateData.phone || null,
             offer_date: candidateData.offerDate,
             offer_result: candidateData.offerResult || 'في انتظار',
             status: 'جديد' as const,
@@ -486,6 +492,7 @@ export const useStore = create<AppState>()(
             maritalStatus: data.marital_status,
             securityCompany: data.security_company,
             position: data.position,
+            phone: data.phone,
             offerDate: data.offer_date,
             offerResult: data.offer_result,
             status: data.status,
@@ -513,6 +520,40 @@ export const useStore = create<AppState>()(
           console.log('تم إضافة المرشح بنجاح إلى قاعدة البيانات')
         } catch (error) {
           console.error('خطأ في إضافة المرشح:', error)
+          throw error
+        }
+      },
+
+      // تحديث بيانات المرشح
+      updateCandidate: async (id, data) => {
+        const { currentUser } = get()
+        if (!currentUser || !['security_employee', 'admin'].includes(currentUser.userType)) return
+
+        try {
+          const updateData: any = { updated_at: new Date().toISOString() }
+          if (data.name           !== undefined) updateData.name             = data.name
+          if (data.nationalId     !== undefined) updateData.national_id      = data.nationalId
+          if (data.birthDate      !== undefined) updateData.birth_date       = data.birthDate
+          if (data.governorate    !== undefined) updateData.governorate      = data.governorate
+          if (data.qualification  !== undefined) updateData.qualification    = data.qualification
+          if (data.maritalStatus  !== undefined) updateData.marital_status   = data.maritalStatus
+          if (data.securityCompany!== undefined) updateData.security_company = data.securityCompany
+          if (data.position       !== undefined) updateData.position         = data.position || null
+          if (data.phone          !== undefined) updateData.phone            = data.phone || null
+          if (data.offerDate      !== undefined) updateData.offer_date       = data.offerDate || null
+          if ((data as any).workShift !== undefined) updateData.work_shift   = (data as any).workShift || null
+          if ((data as any).notes     !== undefined) updateData.notes        = (data as any).notes || null
+
+          const { error } = await supabase.from('candidates').update(updateData).eq('id', id)
+          if (error) throw error
+
+          set(state => ({
+            candidates: state.candidates.map(c =>
+              c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c
+            )
+          }))
+        } catch (error) {
+          console.error('خطأ في تحديث بيانات المرشح:', error)
           throw error
         }
       },
@@ -1316,31 +1357,30 @@ export const useStore = create<AppState>()(
 
       // إضافة مستخدم إلى Supabase
       addUserToSupabase: async (user) => {
-        const { data, error } = await supabase
-          .from('users')
-          .insert([{ 
-            name: user.name, 
-            email: user.email, 
-            user_type: user.userType, 
+        // استخدام Edge Function لإنشاء المستخدم في Auth + جدول users
+        const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`
+        const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+        const response = await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            email: user.email,
+            password: user.password || 'TempPass@123',
+            name: user.name,
             department: user.department,
-            is_active: true // المستخدمون الجدد نشطين افتراضياً
-          }])
-          .select('id, name, email, user_type, department, created_at, is_active')
-          .single()
-        
-        if (error) throw error
-        
-        const mapped: User = {
-          id: data.id,
-          name: data.name,
-          email: data.email,
-          userType: data.user_type as UserType,
-          department: data.department,
-          createdAt: data.created_at,
-          isActive: data.is_active ?? true
-        }
-        
-        set(state => ({ users: [mapped, ...state.users] }))
+            userType: user.userType,
+          }),
+        })
+
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'فشل في إنشاء المستخدم')
+
+        // تحديث القائمة المحلية
+        await get().loadUsersFromSupabase()
       },
 
       // تحديث دور المستخدم
@@ -1441,7 +1481,28 @@ export const useStore = create<AppState>()(
         }
       },
 
-  // إضافة عدة مرشحين من ملف Excel
+      // تحديث صلاحيات مستخدم
+      updateUserPermissions: async (id, permissions) => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') {
+          throw new Error('غير مصرح لك بتعديل الصلاحيات')
+        }
+        try {
+          const { error } = await supabase
+            .from('users')
+            .update({ permissions: permissions as any })
+            .eq('id', id)
+          if (error) throw error
+          set(state => ({
+            users: state.users.map(u => u.id === id ? { ...u, permissions } : u)
+          }))
+        } catch (error) {
+          console.error('خطأ في تحديث الصلاحيات:', error)
+          throw error
+        }
+      },
+
+
   bulkAddCandidates: async (candidates: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt' | 'status'>[]) => {
     const { currentUser } = get()
     if (!currentUser || (currentUser.userType !== 'admin' && currentUser.userType !== 'security_employee')) return { success: 0, failed: 0, errors: [] }

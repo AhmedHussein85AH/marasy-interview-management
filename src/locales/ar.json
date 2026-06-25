@@ -1,0 +1,245 @@
+{
+  "translation": {
+    "footer": {
+      "rights": "جميع الحقوق محفوظة اللواء/ماجد يوسف - شركة توينز لتطوير الويب",
+      "support": "واتس دعم فني +201552119251 | ايميل AhmedHusseinElsayed@outlook.com"
+    },
+    "general": {
+      "print": "طباعة / PDF",
+      "settings": "الإعدادات"
+    },
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "candidates": "المرشحون",
+      "analytics": "التقارير",
+      "database": "قاعدة البيانات",
+      "bulkUpload": "رفع ملفات Excel",
+      "users": "المستخدمون",
+      "usersDesc": "إدارة أعضاء الفريق وأدوارهم",
+      "settings": "الإعدادات",
+      "security": "مراقبة الأمان",
+      "systemName": "نظام مراسي",
+      "systemDesc": "إدارة المقابلات"
+    },
+    "candidates": {
+      "title": "المرشحين",
+      "search": "البحث بالاسم أو الرقم القومي...",
+      "addCandidate": "إضافة مرشح جديد",
+      "bulkEdit": "تعديل جماعي",
+      "limitedAccess": "صلاحيات محدودة - الأدمن فقط يمكنه الحذف",
+      "columns": {
+        "name": "الاسم",
+        "nationalId": "الرقم القومي",
+        "governorate": "المحافظة",
+        "qualification": "المؤهل",
+        "company": "الشركة",
+        "position": "الوظيفة",
+        "mobile": "الموبايل",
+        "birthDate": "تاريخ الميلاد",
+        "maritalStatus": "الحالة الاجتماعية",
+        "status": "حالة العرض",
+        "addDate": "تاريخ الإضافة",
+        "addedBy": "تمت الإضافة بواسطة",
+        "actions": "إجراءات"
+      }
+    },
+    "database": {
+      "title": "قاعدة البيانات المحفوظة",
+      "search": "البحث في قاعدة البيانات...",
+      "exportExcel": "تصدير Excel",
+      "removeDuplicates": "حذف المكررات",
+      "notifications": "الإشعارات",
+      "deleteSelected": "حذف المحدد",
+      "unselect": "إلغاء التحديد",
+      "columns": {
+        "name": "الاسم",
+        "nationalId": "الرقم القومي",
+        "governorate": "المحافظة",
+        "qualification": "المؤهل",
+        "company": "اسم الشركة",
+        "position": "الوظيفة",
+        "shift": "الوردية",
+        "mobile": "الموبايل",
+        "finalResult": "النتيجة النهائية",
+        "decisionDate": "تاريخ القرار",
+        "decisionBy": "قرار من",
+        "notes": "الملاحظات",
+        "previousStatus": "حالة سابقة",
+        "reason": "السبب",
+        "actions": "الإجراءات"
+      }
+    },
+    "dashboard": {
+      "welcome": "مرحباً",
+      "roles": {
+        "securityEmployee": "موظف شركة الأمن",
+        "interviewManager": "مسئول المقابلات",
+        "admin": "مدير النظام",
+        "owner": "مالك النظام"
+      },
+      "stats": {
+        "totalCandidates": "إجمالي المرشحين",
+        "newCandidates": "مرشحون جدد",
+        "pendingInterviews": "مقابلات مجدولة",
+        "completedInterviews": "مقابلات مكتملة",
+        "hiredCandidates": "مرشحون مقبولون"
+      },
+      "recentActivity": {
+        "title": "النشاط الأخير",
+        "subtitle": "آخر 5 مرشحين",
+        "noActivity": "لا يوجد نشاط حتى الآن"
+      },
+      "accountInfo": {
+        "title": "معلومات الحساب",
+        "name": "الاسم",
+        "email": "البريد الإلكتروني",
+        "department": "القسم",
+        "role": "الصلاحية",
+        "namePlaceholder": "أدخل الاسم الكامل",
+        "emailPlaceholder": "أدخل البريد الإلكتروني",
+        "departmentPlaceholder": "أدخل القسم"
+      },
+      "newNotification": "إشعار جديد"
+    },
+    "analytics": {
+      "title": "التقارير والإحصائيات",
+      "subtitle": "نظرة شاملة على أداء عملية التوظيف",
+      "stats": {
+        "pending": "في انتظار",
+        "acceptanceRate": "معدل القبول",
+        "rejected": "مرفوضون",
+        "hired": "مقبولون",
+        "total": "إجمالي المرشحين"
+      },
+      "charts": {
+        "byCompany": "المرشحون حسب شركة الأمن",
+        "results": "توزيع النتائج النهائية",
+        "qualifications": "توزيع المؤهلات (أعلى 10)",
+        "governorates": "أعلى 10 محافظات"
+      }
+    },
+    "upload": {
+      "title": "إدارة البيانات بالجملة",
+      "importData": "استيراد البيانات",
+      "exportData": "تصدير البيانات",
+      "dataType": "نوع البيانات للرفع:",
+      "typeNew": "مرشحين جدد (صفحة المرشحين)",
+      "typeSaved": "مرشحين محفوظين (قاعدة البيانات)",
+      "excelInstructions": "تعليمات تنسيق Excel",
+      "requiredColumns": "الأعمدة المطلوبة: الاسم، الرقم القومي، تاريخ الميلاد، المحافظة، المؤهل، الحالة الاجتماعية، اسم الشركة",
+      "optionalColumns": "الأعمدة الاختيارية: الوظيفة، تاريخ العرض، النتيجة النهائية، تاريخ القرار، قرار من، ملاحظات",
+      "warning": "هام: قيم المحافظة وشركة الأمن يجب أن تتطابق تماماً مع القوائم المعتمدة في النظام",
+      "recordsAvailable": "{{count}} سجل متاح للتصدير",
+      "emptyTemplate": "تحميل قالب فارغ",
+      "templateDesc": "قالب Excel جاهز بالأعمدة الصحيحة للملء والاستيراد",
+      "downloadTemplate": "تحميل القالب",
+      "importJSON": "استيراد من JSON",
+      "orExcelBelow": "أو استخدم ملف Excel أدناه",
+      "chooseExcel": "اختر ملف Excel",
+      "dataPreview": "معاينة البيانات ({{count}} سجل)",
+      "import": "استيراد",
+      "reset": "إعادة تعيين",
+      "viewLists": "عرض القوائم المعتمدة"
+    },
+    "security": {
+      "title": "مراقبة الأمان والأنشطة",
+      "totalLogins": "إجمالي تسجيلات الدخول",
+      "activeSessions": "جلسات نشطة",
+      "activeUsers": "مستخدمين نشطين",
+      "differentCountries": "دول مختلفة",
+      "searchByEmail": "البحث بالبريد الإلكتروني...",
+      "allSessions": "جميع الجلسات",
+      "activeOnly": "نشطة فقط",
+      "inactiveOnly": "منتهية فقط",
+      "user": "المستخدم",
+      "device": "الجهاز",
+      "location": "الموقع",
+      "loginTime": "وقت الدخول",
+      "duration": "المدة",
+      "status": "الحالة",
+      "details": "تفاصيل",
+      "inactive": "(معطل)",
+      "unknown": "غير معروف",
+      "minute": "{{count}} دقيقة",
+      "hourMinute": "{{hours}} ساعة {{minutes}} دقيقة",
+      "active": "نشط",
+      "ended": "منتهي",
+      "viewDetails": "عرض التفاصيل",
+      "sessionDetails": "تفاصيل الجلسة",
+      "ipAddress": "عنوان IP",
+      "browser": "المتصفح",
+      "os": "نظام التشغيل",
+      "country": "البلد",
+      "city": "المدينة",
+      "logoutTime": "وقت الخروج",
+      "sessionId": "معرف الجلسة",
+      "userAgent": "وكيل المستخدم",
+      "noLogs": "لا توجد سجلات دخول"
+    },
+    "users": {
+      "totalUsers": "إجمالي المستخدمين",
+      "addUser": "إضافة مستخدم",
+      "enterDetails": "أدخل بيانات المستخدم الجديد",
+      "fillRequired": "يرجى ملء جميع الحقول المطلوبة",
+      "addSuccessAlert": "✅ تم إضافة المستخدم \"{{name}}\" بنجاح!\n\n⚠️ مهم جداً:\nيجب إضافة هذا المستخدم أيضاً إلى Supabase Auth:\n1. اذهب إلى Supabase Dashboard\n2. Authentication > Users\n3. أضف مستخدم جديد بنفس البريد الإلكتروني: {{email}}\n4. حدد كلمة مرور للمستخدم\n\nبدون ذلك، لن يتمكن المستخدم من تسجيل الدخول!",
+      "addFailure": "فشل في إضافة المستخدم",
+      "updateRole": "تحديث الدور",
+      "updateRoleFailure": "فشل في تحديث الدور",
+      "deleteConfirm": "هل أنت متأكد من حذف المستخدم \"{{name}}\"؟\n\nهذا الإجراء لا يمكن التراجع عنه.",
+      "deleteSuccess": "تم حذف المستخدم بنجاح",
+      "deleteFailure": "فشل في حذف المستخدم",
+      "disable": "تعطيل",
+      "activate": "تفعيل",
+      "toggleStatusConfirm": "هل أنت متأكد من {{action}} حساب \"{{name}}\"؟",
+      "toggleStatusSuccess": "تم {{action}} الحساب بنجاح",
+      "toggleStatusFailure": "فشل في {{action}} الحساب",
+      "teamMembers": "أعضاء الفريق",
+      "allUsersDesc": "جميع المستخدمين في النظام",
+      "disabled": "معطل",
+      "adding": "جاري الإضافة...",
+      "addUserAction": "إضافة المستخدم"
+    },
+    "interviews": {
+      "title": "المقابلات",
+      "subtitle": "{{count}} مقابلة مسجلة",
+      "schedule": "جدولة مقابلة",
+      "scheduleNew": "جدولة مقابلة جديدة",
+      "date": "التاريخ",
+      "time": "الوقت",
+      "positionPlaceholder": "أدخل المنصب",
+      "fillRequired": "يرجى ملء جميع الحقول المطلوبة",
+      "scheduleSuccess": "تم جدولة المقابلة بنجاح",
+      "updateSuccess": "تم تحديث حالة المقابلة بنجاح",
+      "deleteConfirm": "هل أنت متأكد من حذف هذه المقابلة؟",
+      "deleteSuccess": "تم حذف المقابلة بنجاح",
+      "noResults": "لا توجد مقابلات مجدولة حتى الآن"
+    },
+    "layout": {
+      "themeDark": "الوضع الليلي",
+      "themeLight": "الوضع النهاري",
+      "language": "English",
+      "logout": "تسجيل الخروج",
+      "logoutConfirm": "هل أنت متأكد من تسجيل الخروج؟",
+      "collapseSidebar": "طي الشريط الجانبي",
+      "expandSidebar": "توسيع الشريط الجانبي"
+    },
+    "status": {
+      "accepted": "مقبول",
+      "rejected": "مرفوض",
+      "excluded": "مستبعد",
+      "pending": "في انتظار",
+      "new": "جديد",
+      "scheduled": "مجدولة",
+      "completed": "مكتملة"
+    },
+    "actions": {
+      "edit": "تعديل",
+      "delete": "حذف",
+      "exclude": "استبعاد",
+      "resign": "استقالة",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "exportCsv": "تصدير CSV"
+    }
+  }
+}

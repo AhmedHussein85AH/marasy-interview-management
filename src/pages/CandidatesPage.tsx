@@ -1,680 +1,477 @@
-import React, { useState, useEffect } from 'react'
+﻿import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
-import { GOVERNORATES, SECURITY_COMPANIES, POSITIONS } from '../constants/lists'
+import { GOVERNORATES } from '../constants/lists'
+import { useEditableLists } from '../hooks/useEditableLists'
+import { usePermissions } from '../hooks/usePermissions'
+import SelectOrAdd from '../components/SelectOrAdd'
+import MultiSelect from '../components/MultiSelect'
+import { CheckCircle, Pencil, ListChecks, Printer } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
+const EMPTY_CANDIDATE = {
+  name: '', nationalId: '', birthDate: '', governorate: '',
+  qualification: '', maritalStatus: 'أعزب' as const,
+  securityCompany: '', position: '', phone: '', offerDate: '',
+  offerResult: 'في انتظار' as const,
+}
+
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div>
+    <label className="form-label">{label}</label>
+    {children}
+  </div>
+)
 
 const CandidatesPage: React.FC = () => {
-  const { 
-    currentUser, 
-    candidates, 
-    addCandidate, 
-    updateCandidateStatus, 
-    deleteCandidate,
-    searchCandidates,
-    saveCandidateToDatabase
-  } = useStore()
-  
+  const { currentUser, candidates, addCandidate, updateCandidateStatus, deleteCandidate, searchCandidates, saveCandidateToDatabase, updateCandidate } = useStore()
+  const { t, i18n } = useTranslation()
+
   const [showAddForm, setShowAddForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterCompany, setFilterCompany] = useState('')
+  const [filterCompany, setFilterCompany] = useState<string[]>([])
+  const [filterPosition, setFilterPosition] = useState<string[]>([])
+  const [filterGovernorate, setFilterGovernorate] = useState<string[]>([])
+  const [filterResult, setFilterResult] = useState<string[]>([])
   const [filteredCandidates, setFilteredCandidates] = useState(candidates)
   const [showDecisionModal, setShowDecisionModal] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null)
   const [decisionResult, setDecisionResult] = useState<'مقبول' | 'مرفوض' | ''>('')
   const [decisionNotes, setDecisionNotes] = useState('')
   const [workShift, setWorkShift] = useState<'نهار' | 'ليل' | ''>('')
-  const [newCandidate, setNewCandidate] = useState({
-    name: '',
-    nationalId: '',
-    birthDate: '',
-    governorate: '',
-    qualification: '',
-    maritalStatus: 'أعزب' as const,
-    securityCompany: '',
-    position: '',
-    offerDate: '',
-    offerResult: 'في انتظار' as const
-  })
+  const [workLocation, setWorkLocation] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [newCandidate, setNewCandidate] = useState(EMPTY_CANDIDATE)
+  const [editCandidate, setEditCandidate] = useState<any>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [bulkField, setBulkField] = useState('')
+  const [bulkValue, setBulkValue] = useState('')
 
   useEffect(() => {
-    let filtered = candidates
-
-    // تطبيق البحث
-    if (searchQuery) {
-      filtered = searchCandidates(searchQuery)
-    }
-
-    // تطبيق الفلتر حسب الشركة
-    if (filterCompany) {
-      filtered = filtered.filter(candidate => 
-        candidate.securityCompany.toLowerCase().includes(filterCompany.toLowerCase())
-      )
-    }
-
+    let filtered = searchQuery ? searchCandidates(searchQuery) : candidates
+    if (filterCompany.length > 0) filtered = filtered.filter(c => filterCompany.includes(c.securityCompany))
+    if (filterPosition.length > 0) filtered = filtered.filter(c => filterPosition.includes(c.position || ''))
+    if (filterGovernorate.length > 0) filtered = filtered.filter(c => filterGovernorate.includes(c.governorate))
+    if (filterResult.length > 0) filtered = filtered.filter(c => filterResult.includes(c.offerResult))
     setFilteredCandidates(filtered)
-  }, [searchQuery, filterCompany, candidates])
+  }, [searchQuery, filterCompany, filterPosition, filterGovernorate, filterResult, candidates])
 
   const handleAddCandidate = () => {
-    if (!newCandidate.name || !newCandidate.nationalId || !newCandidate.birthDate || 
-        !newCandidate.governorate || !newCandidate.qualification) {
-      alert('يرجى ملء جميع الحقول المطلوبة')
+    if (!newCandidate.name || !newCandidate.nationalId || !newCandidate.birthDate || !newCandidate.governorate || !newCandidate.qualification) {
+      alert(t('candidates.alerts.fillRequired', 'يرجى ملء جميع الحقول المطلوبة'))
       return
     }
-
-    addCandidate({...newCandidate, createdBy: currentUser?.name || 'Unknown'})
-    setNewCandidate({
-      name: '',
-      nationalId: '',
-      birthDate: '',
-      governorate: '',
-      qualification: '',
-      maritalStatus: 'أعزب',
-      securityCompany: '',
-      position: '',
-      offerDate: '',
-      offerResult: 'في انتظار'
-    })
+    addCandidate({ ...newCandidate, createdBy: currentUser?.name || 'Unknown' })
+    setNewCandidate(EMPTY_CANDIDATE)
     setShowAddForm(false)
-    alert('تم إضافة المرشح بنجاح')
+    alert(t('candidates.alerts.addSuccess', 'تم إضافة المرشح بنجاح'))
   }
 
-  const handleStatusUpdate = (id: string, status: string, result: string) => {
+  const handleStatusUpdate = (id: string, _status: string, result: string) => {
     const candidate = candidates.find(c => c.id === id)
     if (candidate) {
       setSelectedCandidate(candidate)
       setDecisionResult(result as 'مقبول' | 'مرفوض')
       setDecisionNotes('')
       setWorkShift('')
+      setWorkLocation('')
+      setStartDate('')
+      setRejectionReason('')
       setShowDecisionModal(true)
     }
   }
 
   const handleSubmitDecision = async () => {
     if (!selectedCandidate || !decisionResult) return
-
     try {
-      // تحديث حالة المرشح مع الملاحظات والوردية
+      // دمج كل المعلومات في الملاحظات
+      const fullNotes = [
+        decisionNotes,
+        decisionResult === 'مقبول' && workLocation ? `الموقع: ${workLocation}` : '',
+        decisionResult === 'مقبول' && startDate ? `تاريخ البداية: ${startDate}` : '',
+        decisionResult === 'مرفوض' && rejectionReason ? `سبب الرفض: ${rejectionReason}` : '',
+      ].filter(Boolean).join(' | ') || undefined
+
       await updateCandidateStatus(
-        selectedCandidate.id, 
-        decisionResult === 'مقبول' ? 'تم التوظيف' : 'مرفوض', 
+        selectedCandidate.id,
+        decisionResult === 'مقبول' ? 'تم التوظيف' : 'مرفوض',
         decisionResult as any,
-        decisionNotes || undefined,
+        fullNotes,
         workShift as 'نهار' | 'ليل' || undefined
       )
-      
-      // حفظ في قاعدة البيانات المحفوظة إذا كان القرار نهائي
       if (decisionResult === 'مقبول' || decisionResult === 'مرفوض') {
-        // الحصول على المرشح المحدث
-        const updatedCandidate = candidates.find(c => c.id === selectedCandidate.id)
-        if (updatedCandidate) {
-          await saveCandidateToDatabase(
-            updatedCandidate, 
-            decisionResult as any,
-            decisionNotes || undefined,
-            workShift as 'نهار' | 'ليل' || undefined
-          )
-        }
+        const updated = candidates.find(c => c.id === selectedCandidate.id)
+        if (updated) await saveCandidateToDatabase(updated, decisionResult as any, fullNotes, workShift as 'نهار' | 'ليل' || undefined)
       }
-      
-      alert('تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح')
+      alert(t('candidates.alerts.statusUpdated', 'تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح'))
       setShowDecisionModal(false)
       setSelectedCandidate(null)
       setDecisionResult('')
       setDecisionNotes('')
       setWorkShift('')
+      setWorkLocation('')
+      setStartDate('')
+      setRejectionReason('')
     } catch (error) {
-      console.error('خطأ في حفظ القرار:', error)
-      alert('حدث خطأ في حفظ القرار')
+      console.error('Error saving decision:', error)
+      alert(t('candidates.alerts.statusUpdateError', 'حدث خطأ في حفظ القرار'))
     }
   }
-
 
   const handleDeleteCandidate = (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا المرشح؟')) {
+    if (window.confirm(t('candidates.alerts.confirmDelete', 'هل أنت متأكد من حذف هذا المرشح؟'))) {
       deleteCandidate(id)
-      alert('تم حذف المرشح بنجاح')
+      alert(t('candidates.alerts.deleteSuccess', 'تم حذف المرشح بنجاح'))
     }
   }
 
-  const canAddCandidate = currentUser?.userType === 'security_employee' || currentUser?.userType === 'admin'
-  const canUpdateStatus = currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
-  const canDelete = currentUser?.userType === 'admin'
+  const handleEditSubmit = async () => {
+    if (!editCandidate) return
+    try {
+      await updateCandidate(editCandidate.id, {
+        name: editCandidate.name,
+        nationalId: editCandidate.nationalId,
+        birthDate: editCandidate.birthDate,
+        governorate: editCandidate.governorate,
+        qualification: editCandidate.qualification,
+        maritalStatus: editCandidate.maritalStatus,
+        securityCompany: editCandidate.securityCompany,
+        position: editCandidate.position,
+        phone: editCandidate.phone,
+        offerDate: editCandidate.offerDate,
+        workShift: editCandidate.workShift,
+        notes: editCandidate.notes,
+      })
+      alert(t('candidates.alerts.updateSuccess', 'تم تحديث بيانات المرشح بنجاح'))
+      setEditCandidate(null)
+    } catch {
+      alert(t('candidates.alerts.updateError', 'حدث خطأ في تحديث البيانات'))
+    }
+  }
 
-  // إضافة رسالة توضيحية للمستخدمين غير المصرح لهم
-  console.log('نوع المستخدم الحالي:', currentUser?.userType)
-  console.log('يمكن الحذف:', canDelete)
+  const handleBulkEdit = async () => {
+    if (!bulkField || !bulkValue || selectedIds.length === 0) return
+    try {
+      await Promise.all(selectedIds.map(id => updateCandidate(id, { [bulkField]: bulkValue } as any)))
+      alert(t('candidates.alerts.bulkUpdateSuccess', 'تم تحديث {{count}} مرشح بنجاح', { count: selectedIds.length }))
+      setShowBulkEdit(false)
+      setSelectedIds([])
+      setBulkField('')
+      setBulkValue('')
+    } catch {
+      alert(t('candidates.alerts.bulkUpdateError', 'حدث خطأ في التحديث'))
+    }
+  }
 
-  // الحصول على قائمة الشركات الفريدة
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+
+  const toggleSelectAll = () =>
+    setSelectedIds(prev => prev.length === filteredCandidates.length ? [] : filteredCandidates.map(c => c.id))
+  const perms = usePermissions()
+  const canAddCandidate = perms.canAddCandidates
+  const canUpdateStatus = perms.canApproveCandidates
+  const canEdit = perms.canEditCandidates
+  const canDelete = perms.canDeleteCandidates
   const uniqueCompanies = Array.from(new Set(candidates.map(c => c.securityCompany))).filter(Boolean)
+  const { allCompanies, allPositions, addCompany, addPosition } = useEditableLists()
+
+  const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setNewCandidate(prev => ({ ...prev, [key]: e.target.value }))
+
 
   return (
     <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
-      <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <h2 style={{ color: '#2c3e50', margin: 0 }}>
-            المرشحين ({filteredCandidates.length})
-            {!canDelete && (
-              <span style={{ 
-                fontSize: '12px', 
-                color: '#7f8c8d', 
-                marginLeft: '10px',
-                fontWeight: 'normal'
-              }}>
-                (صلاحيات محدودة - الأدمن فقط يمكنه الحذف)
-              </span>
-            )}
-          </h2>
-          
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <input
-              type="text"
-              placeholder="البحث في المرشحين..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px',
-                width: '250px'
-              }}
-            />
+      <div className="page-wrapper" style={{ direction: i18n.language === 'en' ? 'ltr' : 'rtl' }}>
 
-            {/* فلتر الشركة */}
-            <select
-              value={filterCompany}
-              onChange={(e) => setFilterCompany(e.target.value)}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px'
-              }}
-            >
-              <option value="">جميع الشركات</option>
-              {uniqueCompanies.map(company => (
-                <option key={company} value={company}>{company}</option>
-              ))}
-            </select>
-            
+        {/* ── Page header ── */}
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">{t('candidates.title')}</h1>
+            <p className="page-subtitle">{filteredCandidates.length} {t('candidates.count', 'مرشح')}</p>
+          </div>
+          <div className="page-header-actions">
+            <div className="search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input className="form-input" style={{ width: '220px' }} type="text" placeholder={t('candidates.search', 'بحث...')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
             {canAddCandidate && (
-              <button
-                onClick={() => setShowAddForm(true)}
-                style={{
-                  backgroundColor: '#3498db',
-                  color: 'white',
-                  padding: '10px 15px',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer'
-                }}
-              >
-                إضافة مرشح جديد
+              <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                {t('candidates.addCandidate', 'إضافة مرشح')}
+              </button>
+            )}
+            <button className="btn btn-ghost btn-sm" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Printer size={14} /> {selectedIds.length > 0 ? `${t('general.print')} (${selectedIds.length})` : t('general.print', 'طباعة')}
+            </button>
+            {canEdit && selectedIds.length > 0 && (
+              <button className="btn btn-sm" style={{ background: '#8b5cf6', color: 'white', display: 'inline-flex', alignItems: 'center', gap: '5px' }} onClick={() => setShowBulkEdit(true)}>
+                <ListChecks size={14} /> {t('candidates.bulkEdit', 'تعديل جماعي')} ({selectedIds.length})
               </button>
             )}
           </div>
         </div>
 
-        {/* نموذج إضافة مرشح */}
+        {/* ── Selection bar ── */}
+        {selectedIds.length > 0 && (
+          <div className="selection-bar">
+            <CheckCircle size={15} />
+            تم تحديد {selectedIds.length} مرشح
+            <button onClick={() => setSelectedIds([])} style={{ marginRight: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', fontFamily: 'inherit' }}>إلغاء التحديد</button>
+          </div>
+        )}
+
+        {/* ── Filters ── */}
+        <div className="filter-bar print-hidden">
+          <MultiSelect options={uniqueCompanies} selectedValues={filterCompany} onChange={setFilterCompany} placeholder={t('candidates.columns.company', 'الشركة')} />
+          <MultiSelect options={allPositions} selectedValues={filterPosition} onChange={setFilterPosition} placeholder={t('candidates.columns.position', 'الوظيفة')} />
+          <MultiSelect options={GOVERNORATES} selectedValues={filterGovernorate} onChange={setFilterGovernorate} placeholder={t('candidates.columns.governorate', 'المحافظة')} />
+          <MultiSelect options={['مقبول','مرفوض','مستبعد','في انتظار']} selectedValues={filterResult} onChange={setFilterResult} placeholder={t('candidates.columns.status', 'النتيجة')} />
+        </div>
+
+        {/* ── Add form ── */}
         {showAddForm && (
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '20px',
-            borderRadius: '10px',
-            marginBottom: '20px',
-            border: '2px solid #3498db'
-          }}>
-            <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>
-              إضافة مرشح جديد
-            </h3>
-            
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '15px',
-              marginBottom: '15px'
-            }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  الاسم الكامل *
-                </label>
-                <input
-                  type="text"
-                  value={newCandidate.name}
-                  onChange={(e) => setNewCandidate({...newCandidate, name: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  placeholder="أدخل الاسم الكامل"
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  الرقم القومي *
-                </label>
-                <input
-                  type="text"
-                  value={newCandidate.nationalId}
-                  onChange={(e) => setNewCandidate({...newCandidate, nationalId: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  placeholder="أدخل الرقم القومي"
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  تاريخ الميلاد *
-                </label>
-                <input
-                  type="date"
-                  value={newCandidate.birthDate}
-                  onChange={(e) => setNewCandidate({...newCandidate, birthDate: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  المحافظة *
-                </label>
-                <select
-                  value={newCandidate.governorate}
-                  onChange={(e) => setNewCandidate({...newCandidate, governorate: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  title="اختر المحافظة"
-                  required
-                >
-                  <option value="">اختر المحافظة</option>
-                  {GOVERNORATES.map((gov) => (
-                    <option key={gov} value={gov}>{gov}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  المؤهل *
-                </label>
-                <input
-                  type="text"
-                  value={newCandidate.qualification}
-                  onChange={(e) => setNewCandidate({...newCandidate, qualification: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  placeholder="أدخل المؤهل"
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  الحالة الاجتماعية
-                </label>
-                <select
-                  value={newCandidate.maritalStatus}
-                  onChange={(e) => setNewCandidate({...newCandidate, maritalStatus: e.target.value as any})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                >
-                  <option value="أعزب">أعزب</option>
-                  <option value="متزوج">متزوج</option>
-                  <option value="مطلق">مطلق</option>
-                  <option value="أرمل">أرمل</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  شركة الأمن
-                </label>
-                <select
-                  value={newCandidate.securityCompany}
-                  onChange={(e) => setNewCandidate({...newCandidate, securityCompany: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  title="اختر شركة الأمن"
-                >
-                  <option value="">اختر شركة الأمن</option>
-                  {SECURITY_COMPANIES.map((company) => (
-                    <option key={company} value={company}>{company}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  الوظيفة (اختياري)
-                </label>
-                <select
-                  value={newCandidate.position}
-                  onChange={(e) => setNewCandidate({...newCandidate, position: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                  title="اختر الوظيفة"
-                >
-                  <option value="">اختر الوظيفة</option>
-                  {POSITIONS.map((position) => (
-                    <option key={position} value={position}>{position}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  تاريخ العرض
-                </label>
-                <input
-                  type="date"
-                  value={newCandidate.offerDate}
-                  onChange={(e) => setNewCandidate({...newCandidate, offerDate: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-                />
-              </div>
+          <div className="section-card" style={{ marginBottom: '20px' }}>
+            <div className="section-card-header">
+              <h3>{t('candidates.addCandidate', 'إضافة مرشح جديد')}</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowAddForm(false)}>إلغاء</button>
             </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={handleAddCandidate}
-                style={{
-                  backgroundColor: '#2ecc71',
-                  color: 'white',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer'
-                }}
-              >
-                إضافة المرشح
-              </button>
-              <button
-                onClick={() => setShowAddForm(false)}
-                style={{
-                  backgroundColor: '#95a5a6',
-                  color: 'white',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer'
-                }}
-              >
-                إلغاء
-              </button>
+            <div className="section-card-body">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                <Field label={t('candidates.columns.name','الاسم') + ' *'}><input className="form-input" type="text" value={newCandidate.name} onChange={set('name')} placeholder={t('candidates.columns.name','الاسم الكامل')} /></Field>
+                <Field label={t('candidates.columns.nationalId','الرقم القومي') + ' *'}><input className="form-input" type="text" value={newCandidate.nationalId} onChange={set('nationalId')} placeholder="14 رقم" /></Field>
+                <Field label={t('candidates.columns.birthDate','تاريخ الميلاد') + ' *'}><input className="form-input" type="date" value={newCandidate.birthDate} onChange={set('birthDate')} /></Field>
+                <Field label={t('candidates.columns.governorate','المحافظة') + ' *'}>
+                  <select className="form-input" value={newCandidate.governorate} onChange={set('governorate')}>
+                    <option value="">اختر المحافظة</option>
+                    {GOVERNORATES.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </Field>
+                <Field label={t('candidates.columns.qualification','المؤهل') + ' *'}><input className="form-input" type="text" value={newCandidate.qualification} onChange={set('qualification')} /></Field>
+                <Field label={t('candidates.columns.maritalStatus','الحالة الاجتماعية')}>
+                  <select className="form-input" value={newCandidate.maritalStatus} onChange={set('maritalStatus')}>
+                    {['أعزب','متزوج','مطلق','أرمل'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field label={t('candidates.columns.company','شركة الأمن')}>
+                  <SelectOrAdd value={newCandidate.securityCompany} options={allCompanies} onChange={v => setNewCandidate(p => ({...p, securityCompany: v}))} onAddNew={addCompany} placeholder="اختر الشركة" />
+                </Field>
+                <Field label={t('candidates.columns.position','الوظيفة')}>
+                  <SelectOrAdd value={newCandidate.position} options={allPositions} onChange={v => setNewCandidate(p => ({...p, position: v}))} onAddNew={addPosition} placeholder="اختر الوظيفة" />
+                </Field>
+                <Field label={t('candidates.columns.mobile','الموبايل')}><input className="form-input" type="tel" value={newCandidate.phone} onChange={set('phone')} placeholder="01xxxxxxxxx" /></Field>
+                <Field label={t('candidates.columns.addDate','تاريخ العرض')}><input className="form-input" type="date" value={newCandidate.offerDate} onChange={set('offerDate')} /></Field>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-success" onClick={handleAddCandidate}><CheckCircle size={14} /> {t('candidates.addCandidate','إضافة المرشح')}</button>
+                <button className="btn btn-ghost" onClick={() => setShowAddForm(false)}>إلغاء</button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* جدول المرشحين */}
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl' }}>
-            <thead style={{ backgroundColor: '#f8f9fa' }}>
-              <tr>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الاسم
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الرقم القومي
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  تاريخ الميلاد
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  المحافظة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  المؤهل
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الحالة الاجتماعية
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  اسم الشركة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الوظيفة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  نتيجة العرض
-                </th>
-                {canUpdateStatus && (
-                  <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                    الإجراءات
-                  </th>
-                )}
-                {canDelete && (
-                  <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                    حذف
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCandidates.map(candidate => (
-                <tr key={candidate.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#2c3e50' }}>
-                    {candidate.name}
-                    {candidate.isRejectedBefore && (
-                      <span style={{
-                        color: '#e74c3c',
-                        marginLeft: '5px',
-                        fontSize: '16px'
-                      }} title={`مرفوض من قبل في ${candidate.previousRejectionDate}`}>
-                        ⚠️
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.nationalId}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.birthDate}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.governorate}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.qualification}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.maritalStatus}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#3498db' }}>
-                    {candidate.securityCompany}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.position || '-'}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    <span style={{
-                      backgroundColor: candidate.offerResult === 'مقبول' ? '#2ecc71' : 
-                                     candidate.offerResult === 'مرفوض' ? '#e74c3c' : 
-                                     candidate.offerResult === 'مستبعد' ? '#f39c12' : '#3498db',
-                      color: 'white',
-                      padding: '5px 10px',
-                      borderRadius: '15px',
-                      fontSize: '12px'
-                    }}>
-                      {candidate.offerResult}
-                    </span>
-                  </td>
-                  {canUpdateStatus && (
-                    <td style={{ padding: '15px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
-                        <button
-                          onClick={() => handleStatusUpdate(candidate.id, 'تم التوظيف', 'مقبول')}
-                          style={{
-                            backgroundColor: '#2ecc71',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          قبول
-                        </button>
-                        <button
-                          onClick={() => handleStatusUpdate(candidate.id, 'مرفوض', 'مرفوض')}
-                          style={{
-                            backgroundColor: '#e74c3c',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          رفض
-                        </button>
+        {/* ── Table ── */}
+        <div className="section-card">
+          <div style={{ overflowX: 'auto' }}>
+            <table className={`data-table${selectedIds.length > 0 ? ' has-selection' : ''}`}>
+              <thead>
+                <tr>
+                  {canEdit && <th className="print-hidden" style={{ width: '40px' }}>
+                    <input type="checkbox" checked={selectedIds.length === filteredCandidates.length && filteredCandidates.length > 0} onChange={toggleSelectAll} style={{ cursor: 'pointer', accentColor: '#8b5cf6' }} />
+                  </th>}
+                  {[t('candidates.columns.name','الاسم'), t('candidates.columns.nationalId','الرقم القومي'), t('candidates.columns.birthDate','تاريخ الميلاد'), t('candidates.columns.governorate','المحافظة'), t('candidates.columns.qualification','المؤهل'), t('candidates.columns.maritalStatus','الحالة'), t('candidates.columns.company','الشركة'), t('candidates.columns.position','الوظيفة'), t('candidates.columns.mobile','الموبايل'), t('candidates.columns.status','النتيجة')].map(h => <th key={h}>{h}</th>)}
+                  {canUpdateStatus && <th className="print-hidden">{t('candidates.columns.actions','الإجراءات')}</th>}
+                  {canEdit && <th className="print-hidden">{t('actions.edit','تعديل')}</th>}
+                  {canDelete && <th className="print-hidden">{t('actions.delete','حذف')}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCandidates.map(candidate => (
+                  <tr key={candidate.id} className={selectedIds.includes(candidate.id) ? 'selected' : ''}>
+                    {canEdit && <td className="print-hidden"><input type="checkbox" checked={selectedIds.includes(candidate.id)} onChange={() => toggleSelect(candidate.id)} style={{ cursor: 'pointer', accentColor: '#8b5cf6' }} /></td>}
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                          {candidate.name}
+                          {candidate.isRejectedBefore && <span title={`مرفوض من قبل في ${candidate.previousRejectionDate}`} style={{ marginRight: '4px', color: 'hsl(var(--warning))' }}>⚠</span>}
+                        </span>
                       </div>
                     </td>
-                  )}
-                  {canDelete && (
-                    <td style={{ padding: '15px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => handleDeleteCandidate(candidate.id)}
-                        style={{
-                          color: '#e74c3c',
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          padding: '5px 10px'
-                        }}
-                      >
-                        حذف
-                      </button>
+                    <td style={{ fontFamily: 'monospace', fontSize: '13px' }}>{candidate.nationalId}</td>
+                    <td>{candidate.birthDate}</td>
+                    <td>{candidate.governorate}</td>
+                    <td>{candidate.qualification}</td>
+                    <td>{candidate.maritalStatus}</td>
+                    <td style={{ fontWeight: 600, color: 'hsl(var(--primary))' }}>{candidate.securityCompany}</td>
+                    <td>{candidate.position || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}</td>
+                    <td>{(candidate as any).phone || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}</td>
+                    <td>
+                      <span className={candidate.offerResult === 'مقبول' ? 'badge badge-success' : candidate.offerResult === 'مرفوض' ? 'badge badge-danger' : candidate.offerResult === 'مستبعد' ? 'badge badge-warning' : 'badge badge-info'}>
+                        {candidate.offerResult}
+                      </span>
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    {canUpdateStatus && (
+                      <td className="print-hidden">
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <button className="btn btn-success btn-sm" onClick={() => handleStatusUpdate(candidate.id,'تم التوظيف','مقبول')}>قبول</button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleStatusUpdate(candidate.id,'مرفوض','مرفوض')}>رفض</button>
+                        </div>
+                      </td>
+                    )}
+                    {canEdit && (
+                      <td className="print-hidden">
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'hsl(var(--primary))' }} onClick={() => setEditCandidate({...candidate})}>
+                          <Pencil size={13} />
+                        </button>
+                      </td>
+                    )}
+                    {canDelete && (
+                      <td className="print-hidden">
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'hsl(var(--danger))' }} onClick={() => handleDeleteCandidate(candidate.id)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filteredCandidates.length === 0 && (
+            <div className="empty-state">لا توجد نتائج مطابقة</div>
+          )}
         </div>
 
-        {filteredCandidates.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px',
-            color: '#7f8c8d'
-          }}>
-            <p>لا توجد مرشحين متطابقين مع البحث</p>
-          </div>
-        )}
-
-        {/* رسالة توضيحية للمستخدمين غير المصرح لهم */}
-        {!canDelete && filteredCandidates.length > 0 && (
-          <div style={{
-            backgroundColor: '#fff3cd',
-            border: '1px solid #ffeaa7',
-            borderRadius: '8px',
-            padding: '15px',
-            marginTop: '20px',
-            textAlign: 'center'
-          }}>
-            <p style={{ color: '#856404', margin: 0 }}>
-              <strong>ملاحظة:</strong> أزرار الحذف متاحة فقط للمديرين (الأدمن). 
-              نوع المستخدم الحالي: <strong>{currentUser?.userType}</strong>
-            </p>
-          </div>
-        )}
-
-        {/* نافذة إدخال الملاحظات والوردية */}
-        {showDecisionModal && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'white',
-              padding: '30px',
-              borderRadius: '10px',
-              maxWidth: '500px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}>
-              <h3 style={{ margin: '0 0 20px 0', color: '#2c3e50' }}>
-                {decisionResult === 'مقبول' ? 'قبول المرشح' : 'رفض المرشح'}: {selectedCandidate?.name}
-              </h3>
-              
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                  الملاحظات (اختياري)
-                </label>
-                <textarea
-                  value={decisionNotes}
-                  onChange={(e) => setDecisionNotes(e.target.value)}
-                  placeholder="اكتب ملاحظات حول القرار..."
-                  style={{
-                    width: '100%',
-                    height: '100px',
-                    padding: '10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    resize: 'vertical'
-                  }}
-                />
+        {/* ── Bulk Edit Modal ── */}
+        {showBulkEdit && (
+          <div className="modal-overlay">
+            <div className="modal-box scale-in">
+              <div className="modal-header">
+                <h3>تعديل جماعي - {selectedIds.length} مرشح</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setShowBulkEdit(false)}>✕</button>
               </div>
-
-              {decisionResult === 'مقبول' && (
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                    الوردية (اختياري)
-                  </label>
-                  <select
-                    value={workShift}
-                    onChange={(e) => setWorkShift(e.target.value as 'نهار' | 'ليل')}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      border: '1px solid #ddd',
-                      borderRadius: '5px'
-                    }}
-                  >
-                    <option value="">اختر الوردية</option>
-                    <option value="نهار">نهار</option>
-                    <option value="ليل">ليل</option>
-                  </select>
+              <div style={{ marginBottom: '14px' }}>
+                <label className="form-label">الحقل المراد تعديله</label>
+                <select className="form-input" value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }}>
+                  <option value="">اختر الحقل</option>
+                  <option value="securityCompany">شركة الأمن</option>
+                  <option value="position">الوظيفة</option>
+                  <option value="governorate">المحافظة</option>
+                  <option value="qualification">المؤهل</option>
+                  <option value="maritalStatus">الحالة الاجتماعية</option>
+                </select>
+              </div>
+              {bulkField && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label className="form-label">القيمة الجديدة</label>
+                  {bulkField === 'securityCompany' && <SelectOrAdd value={bulkValue} options={allCompanies} onChange={setBulkValue} onAddNew={addCompany} placeholder="اختر شركة الأمن" />}
+                  {bulkField === 'position' && <SelectOrAdd value={bulkValue} options={allPositions} onChange={setBulkValue} onAddNew={addPosition} placeholder="اختر الوظيفة" />}
+                  {bulkField === 'governorate' && <select className="form-input" value={bulkValue} onChange={e => setBulkValue(e.target.value)}><option value="">اختر المحافظة</option>{GOVERNORATES.map(g => <option key={g} value={g}>{g}</option>)}</select>}
+                  {bulkField === 'maritalStatus' && <select className="form-input" value={bulkValue} onChange={e => setBulkValue(e.target.value)}><option value="">اختر</option>{['أعزب','متزوج','مطلق','أرمل'].map(v => <option key={v} value={v}>{v}</option>)}</select>}
+                  {bulkField === 'qualification' && <input className="form-input" type="text" value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="أدخل المؤهل" />}
                 </div>
               )}
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => setShowDecisionModal(false)}
-                  style={{
-                    backgroundColor: '#95a5a6',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  إلغاء
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={() => setShowBulkEdit(false)}>إلغاء</button>
+                <button className="btn btn-primary" disabled={!bulkField || !bulkValue} onClick={handleBulkEdit} style={{ opacity: (!bulkField || !bulkValue) ? 0.5 : 1 }}>
+                  <CheckCircle size={14} /> تطبيق على {selectedIds.length} مرشح
                 </button>
-                <button
-                  onClick={handleSubmitDecision}
-                  style={{
-                    backgroundColor: decisionResult === 'مقبول' ? '#2ecc71' : '#e74c3c',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  تأكيد
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Edit Modal ── */}
+        {editCandidate && (
+          <div className="modal-overlay">
+            <div className="modal-box wide scale-in">
+              <div className="modal-header">
+                <h3>تعديل بيانات: {editCandidate.name}</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setEditCandidate(null)}>✕</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '4px' }}>
+                <Field label="الاسم الكامل *"><input className="form-input" type="text" value={editCandidate.name} onChange={e => setEditCandidate((p: any) => ({...p, name: e.target.value}))} /></Field>
+                <Field label="الرقم القومي *"><input className="form-input" type="text" value={editCandidate.nationalId} onChange={e => setEditCandidate((p: any) => ({...p, nationalId: e.target.value}))} /></Field>
+                <Field label="تاريخ الميلاد *"><input className="form-input" type="date" value={editCandidate.birthDate} onChange={e => setEditCandidate((p: any) => ({...p, birthDate: e.target.value}))} /></Field>
+                <Field label="المحافظة *"><select className="form-input" value={editCandidate.governorate} onChange={e => setEditCandidate((p: any) => ({...p, governorate: e.target.value}))}><option value="">اختر</option>{GOVERNORATES.map(g => <option key={g} value={g}>{g}</option>)}</select></Field>
+                <Field label="المؤهل *"><input className="form-input" type="text" value={editCandidate.qualification} onChange={e => setEditCandidate((p: any) => ({...p, qualification: e.target.value}))} /></Field>
+                <Field label="الحالة الاجتماعية"><select className="form-input" value={editCandidate.maritalStatus} onChange={e => setEditCandidate((p: any) => ({...p, maritalStatus: e.target.value}))}>{['أعزب','متزوج','مطلق','أرمل'].map(v => <option key={v} value={v}>{v}</option>)}</select></Field>
+                <Field label="شركة الأمن"><SelectOrAdd value={editCandidate.securityCompany} options={allCompanies} onChange={v => setEditCandidate((p: any) => ({...p, securityCompany: v}))} onAddNew={addCompany} placeholder="اختر الشركة" /></Field>
+                <Field label="الوظيفة"><SelectOrAdd value={editCandidate.position || ''} options={allPositions} onChange={v => setEditCandidate((p: any) => ({...p, position: v}))} onAddNew={addPosition} placeholder="اختر الوظيفة" /></Field>
+                <Field label="رقم الموبايل"><input className="form-input" type="tel" value={editCandidate.phone || ''} onChange={e => setEditCandidate((p: any) => ({...p, phone: e.target.value}))} placeholder="01xxxxxxxxx" /></Field>
+                <Field label="تاريخ العرض"><input className="form-input" type="date" value={editCandidate.offerDate || ''} onChange={e => setEditCandidate((p: any) => ({...p, offerDate: e.target.value}))} /></Field>
+                <Field label="الوردية"><select className="form-input" value={editCandidate.workShift || ''} onChange={e => setEditCandidate((p: any) => ({...p, workShift: e.target.value}))}><option value="">بدون وردية</option><option value="نهار">نهار</option><option value="ليل">ليل</option></select></Field>
+                <Field label="الملاحظات"><textarea className="form-input" value={editCandidate.notes || ''} onChange={e => setEditCandidate((p: any) => ({...p, notes: e.target.value}))} style={{ height: '70px', resize: 'vertical' }} /></Field>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={() => setEditCandidate(null)}>إلغاء</button>
+                <button className="btn btn-primary" onClick={handleEditSubmit}><CheckCircle size={14} /> حفظ التعديلات</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Decision Modal ── */}
+        {showDecisionModal && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <div className="modal-header">
+                <h3>{decisionResult === 'مقبول' ? '✅ قبول المرشح' : '❌ رفض المرشح'}: {selectedCandidate?.name}</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setShowDecisionModal(false)}>✕</button>
+              </div>
+              <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                {/* حقول القبول */}
+                {decisionResult === 'مقبول' && (
+                  <>
+                    <div>
+                      <label className="form-label">الوردية (اختياري)</label>
+                      <select className="form-input" value={workShift} onChange={e => setWorkShift(e.target.value as any)}>
+                        <option value="">اختر الوردية</option>
+                        <option value="نهار">🌤 نهار</option>
+                        <option value="ليل">🌙 ليل</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">الموقع / المنشأة (اختياري)</label>
+                      <input className="form-input" type="text" value={workLocation} onChange={e => setWorkLocation(e.target.value)} placeholder="مثال: مراسي - بوابة 3" />
+                    </div>
+                    <div>
+                      <label className="form-label">تاريخ بداية العمل (اختياري)</label>
+                      <input className="form-input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                    </div>
+                  </>
+                )}
+
+                {/* سبب الرفض */}
+                {decisionResult === 'مرفوض' && (
+                  <div>
+                    <label className="form-label">سبب الرفض (اختياري)</label>
+                    <select className="form-input" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)}>
+                      <option value="">اختر السبب</option>
+                      <option value="غير لائق طبياً">غير لائق طبياً</option>
+                      <option value="سجل جنائي">سجل جنائي</option>
+                      <option value="عدم اجتياز الاختبار">عدم اجتياز الاختبار</option>
+                      <option value="عدم استيفاء الشروط">عدم استيفاء الشروط</option>
+                      <option value="تجاوز السن المطلوب">تجاوز السن المطلوب</option>
+                      <option value="أسباب أخرى">أسباب أخرى</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* الملاحظات */}
+                <div>
+                  <label className="form-label">ملاحظات إضافية (اختياري)</label>
+                  <textarea className="form-input" value={decisionNotes} onChange={e => setDecisionNotes(e.target.value)} placeholder="أي ملاحظات إضافية..." style={{ height: '80px', resize: 'vertical' }} />
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={() => setShowDecisionModal(false)}>إلغاء</button>
+                <button className={`btn ${decisionResult === 'مقبول' ? 'btn-success' : 'btn-danger'}`} onClick={handleSubmitDecision}>
+                  تأكيد القرار
                 </button>
               </div>
             </div>

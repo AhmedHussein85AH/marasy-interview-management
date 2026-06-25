@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { supabase } from '../integrations/supabase/client'
 
@@ -129,168 +129,102 @@ const LoginPage: React.FC = () => {
 
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px'
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        padding: '40px',
-        borderRadius: '15px',
-        boxShadow: '0 15px 35px rgba(0, 0, 0, 0.1)',
-        width: '100%',
-        maxWidth: '400px',
-        textAlign: 'center'
-      }}>
-        <h1 style={{
-          color: '#2c3e50',
-          marginBottom: '30px',
-          fontSize: '28px',
-          fontWeight: 'bold'
-        }}>
-          نظام إدارة المقابلات
-        </h1>
+    <div className="login-page">
+      <div className="login-card fade-in-up" style={{ direction: 'rtl' }}>
+        {/* Logo */}
+        <div className="login-logo">
+          <ShieldCheck size={26} color="white" />
+        </div>
 
-        <form onSubmit={handleLogin} style={{ marginBottom: '30px' }}>
-          <div style={{ marginBottom: '20px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'hsl(220 25% 14%)', margin: '0 0 6px' }}>
+            نظام مراسي
+          </h1>
+          <p style={{ fontSize: '13px', color: 'hsl(215 16% 52%)', margin: 0 }}>
+            سجّل دخولك للمتابعة
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '16px' }}>
+            <label className="form-label">البريد الإلكتروني</label>
             <input
               type="email"
-              placeholder="البريد الإلكتروني"
+              placeholder="example@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '15px',
-                border: '2px solid #e1e8ed',
-                borderRadius: '8px',
-                fontSize: '16px',
-                outline: 'none',
-                transition: 'border-color 0.3s ease'
-              }}
+              className="form-input"
             />
           </div>
 
-          <div style={{ marginBottom: '20px', position: 'relative' }}>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              placeholder="كلمة المرور"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '15px',
-                paddingRight: '50px',
-                border: '2px solid #e1e8ed',
-                borderRadius: '8px',
-                fontSize: '16px',
-                outline: 'none',
-                transition: 'border-color 0.3s ease'
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: 'absolute',
-                right: '15px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#7f8c8d',
-                fontSize: '18px'
-              }}
-            >
-              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
+          <div style={{ marginBottom: '16px' }}>
+            <label className="form-label">كلمة المرور</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="form-input"
+                style={{ paddingLeft: '44px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute', left: '12px', top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'hsl(215 16% 52%)', display: 'flex', alignItems: 'center'
+                }}
+              >
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
           </div>
 
           {error && (
             <div style={{
-              color: '#e74c3c',
-              marginBottom: '20px',
-              fontSize: '14px',
-              backgroundColor: '#ffeaea',
-              padding: '10px',
-              borderRadius: '5px',
-              border: '1px solid #e74c3c'
+              background: 'hsl(4 86% 95%)',
+              border: '1px solid hsl(4 86% 85%)',
+              color: 'hsl(4 86% 45%)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              fontSize: '13px',
+              marginBottom: '16px'
             }}>
               {error}
             </div>
           )}
 
-          {/* خاصية تذكرني */}
-          <div style={{ 
-            marginBottom: '20px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'flex-start' 
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
             <input
               type="checkbox"
               id="rememberMe"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              style={{
-                marginRight: '10px',
-                width: '16px',
-                height: '16px',
-                cursor: 'pointer'
-              }}
+              style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'hsl(217 91% 48%)' }}
             />
-            <label 
-              htmlFor="rememberMe" 
-              style={{
-                color: '#7f8c8d',
-                fontSize: '14px',
-                cursor: 'pointer',
-                userSelect: 'none'
-              }}
-            >
+            <label htmlFor="rememberMe" style={{ fontSize: '13px', color: 'hsl(215 16% 52%)', cursor: 'pointer' }}>
               تذكرني
             </label>
           </div>
 
-          <button
-            type="submit"
-            style={{
-              width: '100%',
-              padding: '15px',
-              backgroundColor: '#3498db',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              transition: 'background-color 0.3s ease'
-            }}
-          >
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '11px', fontSize: '15px' }}>
             تسجيل الدخول
           </button>
         </form>
 
-
-
-        {/* حقوق الطبع والنشر */}
         <div style={{
-          marginTop: '15px',
-          paddingTop: '10px',
-          borderTop: '1px solid #ecf0f1',
-          color: '#7f8c8d',
-          fontSize: '11px'
+          marginTop: '28px', paddingTop: '16px',
+          borderTop: '1px solid hsl(214 20% 92%)',
+          textAlign: 'center',
+          color: 'hsl(215 16% 65%)',
+          fontSize: '11px',
+          lineHeight: 1.7
         }}>
-          <p style={{ margin: '5px 0', whiteSpace: 'nowrap' }}>
-            © 2024 Ahmed Hussein - Security Coordinator. All rights reserved.
-          </p>
-          <p style={{ margin: '5px 0' }}>
-            نظام إدارة المقابلات مراسي | Marassi Interview Management System
-          </p>
+          <div>© 2024 Ahmed Hussein · Security Coordinator</div>
+          <div>Marassi Interview Management System</div>
         </div>
       </div>
     </div>

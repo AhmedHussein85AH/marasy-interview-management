@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from 'react'
+﻿import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { supabase } from '../integrations/supabase/client'
+import { Bell, Download, Trash2, AlertTriangle, Search, UserMinus, LogOut as Resign } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { GOVERNORATES } from '../constants/lists'
+import { useEditableLists } from '../hooks/useEditableLists'
+import MultiSelect from '../components/MultiSelect'
+import { usePermissions } from '../hooks/usePermissions'
 
 const DatabasePage: React.FC = () => {
   const { 
@@ -18,10 +24,15 @@ const DatabasePage: React.FC = () => {
     saveCandidateToDatabase,
     set
   } = useStore()
+
+  const { t, i18n } = useTranslation()
+  const dir = i18n.language === 'en' ? 'ltr' : 'rtl'
   
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterResult, setFilterResult] = useState<'all' | 'مقبول' | 'مرفوض' | 'مستبعد'>('all')
-  const [filterCompany, setFilterCompany] = useState('')
+  const [filterResult, setFilterResult] = useState<string[]>([])
+  const [filterCompany, setFilterCompany] = useState<string[]>([])
+  const [filterPosition, setFilterPosition] = useState<string[]>([])
+  const [filterGovernorate, setFilterGovernorate] = useState<string[]>([])
   const [filteredCandidates, setFilteredCandidates] = useState(savedCandidates)
   const [showNotifications, setShowNotifications] = useState(false)
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([])
@@ -34,26 +45,13 @@ const DatabasePage: React.FC = () => {
 
   useEffect(() => {
     let filtered = savedCandidates
-
-    // تطبيق البحث
-    if (searchQuery) {
-      filtered = searchSavedCandidates(searchQuery)
-    }
-
-    // تطبيق الفلتر حسب النتيجة
-    if (filterResult !== 'all') {
-      filtered = filtered.filter(candidate => candidate.finalResult === filterResult)
-    }
-
-    // تطبيق الفلتر حسب الشركة
-    if (filterCompany) {
-      filtered = filtered.filter(candidate => 
-        candidate.securityCompany.toLowerCase().includes(filterCompany.toLowerCase())
-      )
-    }
-
+    if (searchQuery) filtered = searchSavedCandidates(searchQuery)
+    if (filterCompany.length > 0) filtered = filtered.filter(c => filterCompany.includes(c.securityCompany))
+    if (filterPosition.length > 0) filtered = filtered.filter(c => filterPosition.includes(c.position || ''))
+    if (filterGovernorate.length > 0) filtered = filtered.filter(c => filterGovernorate.includes(c.governorate))
+    if (filterResult.length > 0) filtered = filtered.filter(c => filterResult.includes(c.finalResult))
     setFilteredCandidates(filtered)
-  }, [searchQuery, filterResult, filterCompany, savedCandidates])
+  }, [searchQuery, filterResult, filterCompany, filterPosition, filterGovernorate, savedCandidates])
 
   const getResultColor = (result: string) => {
     switch (result) {
@@ -78,12 +76,8 @@ const DatabasePage: React.FC = () => {
   const canViewDatabase = currentUser?.userType === 'security_employee' || currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
   const canDelete = currentUser?.userType === 'admin'
 
-  // إضافة رسالة توضيحية للمستخدمين غير المصرح لهم
-  console.log('نوع المستخدم الحالي:', currentUser?.userType)
-  console.log('يمكن الحذف:', canDelete)
-
-  // الحصول على قائمة الشركات الفريدة
   const uniqueCompanies = Array.from(new Set(savedCandidates.map(c => c.securityCompany))).filter(Boolean)
+  const { allPositions } = useEditableLists()
 
   // وظائف التعامل مع الاختيار
   const handleSelectCandidate = (id: string) => {
@@ -292,804 +286,321 @@ const DatabasePage: React.FC = () => {
   // وظيفة تصدير البيانات إلى Excel
   const exportToExcel = () => {
     const headers = [
-      'الاسم', 'الرقم القومي', 'المحافظة', 'المؤهل', 'اسم الشركة', 'الوظيفة',
-      'النتيجة النهائية', 'تاريخ القرار', 'قرار من', 'الملاحظات', 'حالة سابقة', 'السبب'
+      'الاسم', 'الرقم القومي', 'تاريخ الميلاد', 'المحافظة', 'المؤهل',
+      'الحالة الاجتماعية', 'اسم الشركة', 'الوظيفة', 'الوردية', 'الموبايل',
+      'النتيجة النهائية', 'تاريخ القرار', 'قرار من', 'الملاحظات',
+      'حالة سابقة', 'السبب'
     ]
 
-    const data = filteredCandidates.map(candidate => [
+    const source = filteredCandidates.length < savedCandidates.length
+      ? filteredCandidates
+      : savedCandidates
+
+    const data = source.map(candidate => [
       candidate.name,
       candidate.nationalId,
+      candidate.birthDate || '',
       candidate.governorate,
       candidate.qualification,
+      candidate.maritalStatus || '',
       candidate.securityCompany,
       candidate.position || '',
+      candidate.workShift || '',
+      (candidate as any).phone || '',
       candidate.finalResult,
       new Date(candidate.decisionDate).toLocaleDateString('en-GB'),
       candidate.decisionBy,
       candidate.notes || '',
       candidate.isRejectedBefore ? 'مرفوض سابقاً' : 'جديد',
-      candidate.exclusionReason ? `استبعاد: ${candidate.exclusionReason}` : 
-      candidate.resignationReason ? `استقالة: ${candidate.resignationReason}` : 'لا يوجد'
+      candidate.exclusionReason ? `استبعاد: ${candidate.exclusionReason}` :
+      candidate.resignationReason ? `استقالة: ${candidate.resignationReason}` : '—'
     ])
 
-    // إنشاء CSV
     const csvContent = [headers, ...data]
-      .map(row => row.map(field => `"${field}"`).join(','))
+      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
       .join('\n')
 
-    // تحميل الملف
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `candidates_database_${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
+    link.href = URL.createObjectURL(blob)
+    link.download = `database_export_${new Date().toISOString().split('T')[0]}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
+
+
+  const RESULT_BADGE: Record<string, string> = {
+    'مقبول':   'badge badge-success',
+    'مرفوض':   'badge badge-danger',
+    'مستبعد':  'badge badge-warning',
+    'استقالة': 'badge badge-purple',
+  }
+
   return (
     <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
-      <div style={{ padding: '20px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 60px)' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <h2 style={{ color: '#2c3e50', margin: 0 }}>
-            قاعدة البيانات المحفوظة ({filteredCandidates.length})
-            {!canDelete && (
-              <span style={{ 
-                fontSize: '12px', 
-                color: '#7f8c8d', 
-                marginLeft: '10px',
-                fontWeight: 'normal'
-              }}>
-                (صلاحيات محدودة - الأدمن فقط يمكنه الحذف)
-              </span>
-            )}
-          </h2>
-          
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* زر الإشعارات */}
+      <div className="page-wrapper" style={{ direction: dir }}>
+
+        {/* ── Header ── */}
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">{t('database.title')}</h1>
+            <p className="page-subtitle">{filteredCandidates.length} {t('candidates.count', 'سجل')}</p>
+          </div>
+          <div className="page-header-actions">
             <button
+              className={`btn btn-sm ${unreadNotifications.length > 0 ? 'btn-danger' : 'btn-ghost'}`}
               onClick={() => setShowNotifications(!showNotifications)}
-              style={{
-                backgroundColor: unreadNotifications.length > 0 ? '#e74c3c' : '#3498db',
-                color: 'white',
-                padding: '10px 15px',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                position: 'relative'
-              }}
+              style={{ position: 'relative' }}
             >
-              الإشعارات {unreadNotifications.length > 0 && `(${unreadNotifications.length})`}
+              <Bell size={14} />
+              {unreadNotifications.length > 0 && (
+                <span className="notif-dot" style={{ position: 'absolute', top: '-6px', left: '-6px' }}>
+                  {unreadNotifications.length}
+                </span>
+              )}
+              {t('database.notifications')}
             </button>
-
-            {/* زر التصدير */}
-            <button
-              onClick={exportToExcel}
-              style={{
-                backgroundColor: '#27ae60',
-                color: 'white',
-                padding: '10px 15px',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer'
-              }}
-            >
-              تصدير Excel
+            <button className="btn btn-success btn-sm" onClick={exportToExcel}>
+              <Download size={14} /> {t('database.exportExcel')}
             </button>
-
-            {/* زر حذف البيانات المكررة */}
             {canDelete && (
-              <button
-                onClick={handleRemoveDuplicates}
-                style={{
-                  backgroundColor: '#e67e22',
-                  color: 'white',
-                  padding: '10px 15px',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer'
-                }}
-              >
-                حذف المكررات
+              <button className="btn btn-sm" style={{ background: '#e67e22', color: 'white' }} onClick={handleRemoveDuplicates}>
+                {t('database.removeDuplicates')}
               </button>
             )}
-
-            {/* البحث */}
-            <input
-              type="text"
-              placeholder="البحث في قاعدة البيانات..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px',
-                width: '250px'
-              }}
-            />
-
-            {/* فلتر النتائج */}
-            <select
-              value={filterResult}
-              onChange={(e) => setFilterResult(e.target.value as any)}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px'
-              }}
-              title="فلتر النتائج"
-            >
-              <option value="all">جميع النتائج</option>
-              <option value="مقبول">مقبول</option>
-              <option value="مرفوض">مرفوض</option>
-              <option value="مستبعد">مستبعد</option>
-            </select>
-
-            {/* فلتر الشركة */}
-            <select
-              value={filterCompany}
-              onChange={(e) => setFilterCompany(e.target.value)}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px'
-              }}
-              title="فلتر الشركة"
-            >
-              <option value="">جميع الشركات</option>
-              {uniqueCompanies.map(company => (
-                <option key={company} value={company}>{company}</option>
-              ))}
-            </select>
-
-            {/* أزرار الحذف */}
             {canDelete && selectedCandidates.length > 0 && (
               <>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  style={{
-                    backgroundColor: '#e74c3c',
-                    color: 'white',
-                    padding: '10px 15px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  حذف المحدد ({selectedCandidates.length})
+                <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteConfirm(true)}>
+                  <Trash2 size={13} /> {t('database.deleteSelected')} ({selectedCandidates.length})
                 </button>
-                <button
-                  onClick={() => setSelectedCandidates([])}
-                  style={{
-                    backgroundColor: '#95a5a6',
-                    color: 'white',
-                    padding: '10px 15px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  إلغاء التحديد
-                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedCandidates([])}>{t('database.unselect')}</button>
               </>
             )}
+            <button className="btn btn-ghost btn-sm print-hidden" onClick={() => window.print()}>
+              🖨️ {selectedCandidates.length > 0 ? `${t('general.print')} (${selectedCandidates.length})` : t('general.print')}
+            </button>
           </div>
         </div>
 
-        {/* الإشعارات */}
+        {/* ── Stats mini ── */}
+        <div className="stats-mini">
+          {[
+            { label: t('status.accepted'),  value: getSavedCandidatesByResult('مقبول').length,  color: 'hsl(var(--success))' },
+            { label: t('status.rejected'),  value: getSavedCandidatesByResult('مرفوض').length,  color: 'hsl(var(--danger))' },
+            { label: t('status.excluded'),  value: getSavedCandidatesByResult('مستبعد').length, color: 'hsl(var(--warning))' },
+            { label: i18n.language === 'en' ? 'Total' : 'الإجمالي', value: savedCandidates.length, color: 'hsl(var(--primary))' },
+          ].map(s => (
+            <div key={s.label} className="stats-mini-card">
+              <div className="value" style={{ color: s.color }}>{s.value}</div>
+              <div className="label">{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Notifications panel ── */}
         {showNotifications && (
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            marginBottom: '20px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ color: '#2c3e50', marginBottom: '15px' }}>
-              الإشعارات ({unreadNotifications.length} غير مقروء)
-            </h3>
-            
-            {unreadNotifications.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {unreadNotifications.map(notification => (
-                  <div key={notification.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '15px',
-                    backgroundColor: '#fff3cd',
-                    borderRadius: '8px',
-                    border: '1px solid #ffeaa7'
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 'bold', color: '#856404' }}>
-                        {notification.title}
+          <div className="section-card slide-down" style={{ marginBottom: '16px' }}>
+            <div className="section-card-header">
+              <h3>الإشعارات ({unreadNotifications.length} غير مقروء)</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowNotifications(false)}>✕</button>
+            </div>
+            <div className="section-card-body" style={{ padding: '12px 16px' }}>
+              {unreadNotifications.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {unreadNotifications.map(n => (
+                    <div key={n.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'hsl(38 100% 94%)', borderRadius: '8px', border: '1px solid hsl(38 92% 80%)' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'hsl(38 60% 35%)', fontSize: '13px' }}>{n.title}</div>
+                        <div style={{ color: 'hsl(38 60% 45%)', fontSize: '12px', marginTop: '2px' }}>{n.message}</div>
                       </div>
-                      <div style={{ color: '#856404', fontSize: '14px' }}>
-                        {notification.message}
-                      </div>
-                      <div style={{ color: '#856404', fontSize: '12px', marginTop: '5px' }}>
-                        {notification.candidateName} - {new Date(notification.createdAt).toLocaleDateString('en-GB')}
-                      </div>
+                      <button className="btn btn-success btn-sm" onClick={() => markNotificationAsRead(n.id)}>تم القراءة</button>
                     </div>
-                    <button
-                      onClick={() => markNotificationAsRead(notification.id)}
-                      style={{
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        padding: '5px 10px',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      تم القراءة
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: '#7f8c8d', textAlign: 'center' }}>
-                لا توجد إشعارات جديدة
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* نافذة تأكيد الحذف */}
-        {showDeleteConfirm && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'white',
-              padding: '30px',
-              borderRadius: '10px',
-              maxWidth: '400px',
-              textAlign: 'center'
-            }}>
-              <h3 style={{ color: '#e74c3c', marginBottom: '20px' }}>
-                تأكيد الحذف
-              </h3>
-              <p style={{ marginBottom: '20px' }}>
-                هل أنت متأكد من حذف {selectedCandidates.length} مرشح؟
-                <br />
-                <strong>هذا الإجراء لا يمكن التراجع عنه!</strong>
-              </p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                <button
-                  onClick={handleDeleteSelected}
-                  style={{
-                    backgroundColor: '#e74c3c',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  نعم، احذف
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  style={{
-                    backgroundColor: '#95a5a6',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  إلغاء
-                </button>
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: 'hsl(var(--muted-foreground))', textAlign: 'center', margin: '8px 0', fontSize: '13px' }}>لا توجد إشعارات جديدة</p>
+              )}
             </div>
           </div>
         )}
 
-        {/* إحصائيات سريعة */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '20px',
-          marginBottom: '20px'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#2ecc71',
-              marginBottom: '10px'
-            }}>
-              {getSavedCandidatesByResult('مقبول').length}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '14px', fontWeight: 'bold' }}>
-              مقبول
-            </div>
+        {/* ── Filters ── */}
+        <div className="filter-bar print-hidden">
+          <div className="search-box">
+            <Search size={14} />
+            <input className="form-input" style={{ width: '220px' }} type="text" placeholder="بحث في قاعدة البيانات..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#e74c3c',
-              marginBottom: '10px'
-            }}>
-              {getSavedCandidatesByResult('مرفوض').length}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '14px', fontWeight: 'bold' }}>
-              مرفوض
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#f39c12',
-              marginBottom: '10px'
-            }}>
-              {getSavedCandidatesByResult('مستبعد').length}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '14px', fontWeight: 'bold' }}>
-              مستبعد
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#3498db',
-              marginBottom: '10px'
-            }}>
-              {savedCandidates.length}
-            </div>
-            <div style={{ color: '#2c3e50', fontSize: '14px', fontWeight: 'bold' }}>
-              إجمالي
-            </div>
-          </div>
+          <MultiSelect options={['مقبول','مرفوض','مستبعد','استقالة']} selectedValues={filterResult} onChange={setFilterResult} placeholder={t('database.columns.finalResult')} />
+          <MultiSelect options={uniqueCompanies} selectedValues={filterCompany} onChange={setFilterCompany} placeholder={t('database.columns.company')} />
+          <MultiSelect options={allPositions} selectedValues={filterPosition} onChange={setFilterPosition} placeholder={t('database.columns.position')} />
+          <MultiSelect options={GOVERNORATES} selectedValues={filterGovernorate} onChange={setFilterGovernorate} placeholder={t('database.columns.governorate')} />
         </div>
 
-        {/* جدول قاعدة البيانات */}
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl' }}>
-            <thead style={{ backgroundColor: '#f8f9fa' }}>
-              <tr>
-                {canDelete && (
-                  <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedCandidates.length === filteredCandidates.length && filteredCandidates.length > 0}
-                      onChange={handleSelectAll}
-                      style={{ transform: 'scale(1.2)' }}
-                      aria-label="تحديد الكل"
-                      title="تحديد الكل"
-                    />
-                  </th>
-                )}
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الاسم
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الرقم القومي
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  المحافظة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  المؤهل
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  اسم الشركة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الوظيفة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الوردية
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  النتيجة النهائية
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  تاريخ القرار
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  قرار من
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  الملاحظات
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  حالة سابقة
-                </th>
-                <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                  السبب
-                </th>
-                {canDelete && (
-                  <th style={{ padding: '15px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontSize: '14px', fontWeight: 'bold' }}>
-                    الإجراءات
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCandidates.map(candidate => (
-                <tr key={candidate.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+        {/* ── Selection bar ── */}
+        {selectedCandidates.length > 0 && (
+          <div className="selection-bar">
+            تم تحديد {selectedCandidates.length} سجل
+            <button onClick={() => setSelectedCandidates([])} style={{ marginRight: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', fontFamily: 'inherit' }}>إلغاء التحديد</button>
+          </div>
+        )}
+
+        {/* ── Table ── */}
+        <div className="section-card">
+          <div style={{ overflowX: 'auto' }}>
+            <table className={`data-table${selectedCandidates.length > 0 ? ' has-selection' : ''}`}>
+              <thead>
+                <tr>
                   {canDelete && (
-                    <td style={{ padding: '15px', textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedCandidates.includes(candidate.id)}
-                        onChange={() => handleSelectCandidate(candidate.id)}
-                        style={{ transform: 'scale(1.2)' }}
-                        aria-label={`تحديد ${candidate.name}`}
-                        title={`تحديد ${candidate.name}`}
-                      />
-                    </td>
+                    <th style={{ width: '40px' }}>
+                      <input type="checkbox" checked={selectedCandidates.length === filteredCandidates.length && filteredCandidates.length > 0} onChange={handleSelectAll} style={{ cursor: 'pointer' }} aria-label="تحديد الكل" />
+                    </th>
                   )}
-                  <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#2c3e50' }}>
-                    {candidate.name}
-                    {candidate.isRejectedBefore && (
-                      <span style={{
-                        color: '#e74c3c',
-                        marginLeft: '5px',
-                        fontSize: '16px'
-                      }} title={`مرفوض من قبل في ${candidate.previousRejectionDate}`}>
-                        ⚠️
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.nationalId}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.governorate}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.qualification}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center', fontWeight: 'bold', color: '#3498db' }}>
-                    {candidate.securityCompany}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.position || '-'}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.workShift || '-'}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    <span style={{
-                      backgroundColor: getResultColor(candidate.finalResult),
-                      color: 'white',
-                      padding: '5px 10px',
-                      borderRadius: '15px',
-                      fontSize: '12px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}>
-                      {getResultIcon(candidate.finalResult)} {candidate.finalResult}
-                    </span>
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {new Date(candidate.decisionDate).toLocaleDateString('en-GB')}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.decisionBy}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.notes || '-'}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.isRejectedBefore ? (
-                      <span style={{
-                        color: '#e74c3c',
-                        fontSize: '12px'
-                      }}>
-                        مرفوض سابقاً
-                      </span>
-                    ) : (
-                      <span style={{
-                        color: '#2ecc71',
-                        fontSize: '12px'
-                      }}>
-                        جديد
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    {candidate.exclusionReason && (
-                      <div style={{ fontSize: '12px', color: '#f39c12' }}>
-                        <strong>استبعاد:</strong> {candidate.exclusionReason}
-                      </div>
-                    )}
-                    {candidate.resignationReason && (
-                      <div style={{ fontSize: '12px', color: '#9b59b6' }}>
-                        <strong>استقالة:</strong> {candidate.resignationReason}
-                      </div>
-                    )}
-                    {!candidate.exclusionReason && !candidate.resignationReason && (
-                      <span style={{ color: '#95a5a6', fontSize: '12px' }}>
-                        لا يوجد
-                      </span>
-                    )}
-                  </td>
-                  {canDelete && (
-                    <td style={{ padding: '15px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => handleExclusionClick(candidate.id)}
-                          style={{
-                            backgroundColor: '#f39c12',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          استبعاد
-                        </button>
-                        <button
-                          onClick={() => handleResignationClick(candidate.id)}
-                          style={{
-                            backgroundColor: '#9b59b6',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          استقالة
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSingle(candidate.id)}
-                          style={{
-                            backgroundColor: '#e74c3c',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          حذف
-                        </button>
-                      </div>
-                    </td>
-                  )}
+                  {[
+                    t('database.columns.name'), t('database.columns.nationalId'),
+                    t('database.columns.governorate'), t('database.columns.qualification'),
+                    t('database.columns.company'), t('database.columns.position'),
+                    t('database.columns.shift'), t('candidates.columns.mobile'),
+                    t('database.columns.finalResult'),
+                    t('database.columns.decisionDate'), t('database.columns.decisionBy'),
+                    t('database.columns.notes'), t('database.columns.previousStatus'),
+                    t('database.columns.reason')
+                  ].map(h => <th key={h}>{h}</th>)}
+                  {canDelete && <th>{t('database.columns.actions')}</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredCandidates.map(candidate => (
+                  <tr key={candidate.id} className={selectedCandidates.includes(candidate.id) ? 'selected' : ''}>
+                    {canDelete && (
+                      <td>
+                        <input type="checkbox" checked={selectedCandidates.includes(candidate.id)} onChange={() => handleSelectCandidate(candidate.id)} style={{ cursor: 'pointer' }} aria-label={`تحديد ${candidate.name}`} />
+                      </td>
+                    )}
+                    <td>
+                      <div className="name-cell">
+                        <span style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                          {candidate.name}
+                          {candidate.isRejectedBefore && (
+                            <span title={`مرفوض من قبل في ${candidate.previousRejectionDate}`} style={{ marginRight: '4px', color: 'hsl(var(--warning))' }}>⚠</span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="mono">{candidate.nationalId}</td>
+                    <td>{candidate.governorate}</td>
+                    <td>{candidate.qualification}</td>
+                    <td className="primary">{candidate.securityCompany}</td>
+                    <td className="muted">{candidate.position || '—'}</td>
+                    <td>{candidate.workShift ? <span className="badge badge-info">{candidate.workShift}</span> : <span className="muted">—</span>}</td>
+                    <td className="mono">{(candidate as any).phone || '—'}</td>
+                    <td>
+                      <span className={RESULT_BADGE[candidate.finalResult] || 'badge badge-muted'}>
+                        {candidate.finalResult}
+                      </span>
+                    </td>
+                    <td className="muted">{new Date(candidate.decisionDate).toLocaleDateString('en-GB')}</td>
+                    <td className="muted">{candidate.decisionBy}</td>
+                    <td className="muted" style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{candidate.notes || '—'}</td>
+                    <td>
+                      {candidate.isRejectedBefore
+                        ? <span className="badge badge-warning">مرفوض سابقاً</span>
+                        : <span className="badge badge-muted">جديد</span>}
+                    </td>
+                    <td className="muted" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {candidate.exclusionReason ? `استبعاد: ${candidate.exclusionReason}` :
+                       candidate.resignationReason ? `استقالة: ${candidate.resignationReason}` : '—'}
+                    </td>
+                    {canDelete && (
+                      <td>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button className="btn btn-ghost btn-sm" title="استبعاد" style={{ color: 'hsl(var(--warning))' }} onClick={() => handleExclusionClick(candidate.id)}>
+                            <UserMinus size={13} />
+                          </button>
+                          <button className="btn btn-ghost btn-sm" title="استقالة" style={{ color: 'hsl(var(--purple))' }} onClick={() => handleResignationClick(candidate.id)}>
+                            <Resign size={13} />
+                          </button>
+                          <button className="btn btn-ghost btn-sm" title="حذف" style={{ color: 'hsl(var(--danger))' }} onClick={() => handleDeleteSingle(candidate.id)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filteredCandidates.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-state-icon">🗄️</div>
+              لا توجد سجلات مطابقة
+            </div>
+          )}
         </div>
 
-        {filteredCandidates.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px',
-            color: '#7f8c8d'
-          }}>
-            <p>لا توجد بيانات محفوظة متطابقة مع البحث</p>
+        {/* ── Delete confirm modal ── */}
+        {showDeleteConfirm && (
+          <div className="modal-overlay">
+            <div className="modal-box scale-in" style={{ maxWidth: '400px', textAlign: 'center' }}>
+              <div className="modal-header" style={{ justifyContent: 'center' }}>
+                <AlertTriangle size={32} color="hsl(var(--danger))" />
+              </div>
+              <div className="modal-body">
+                <h3 style={{ color: 'hsl(var(--danger))', marginBottom: '10px' }}>تأكيد الحذف</h3>
+                <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '14px' }}>
+                  هل أنت متأكد من حذف {selectedCandidates.length} سجل؟ هذا الإجراء لا يمكن التراجع عنه.
+                </p>
+              </div>
+              <div className="modal-footer" style={{ justifyContent: 'center' }}>
+                <button className="btn btn-danger" onClick={handleDeleteSelected}>نعم، احذف</button>
+                <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(false)}>إلغاء</button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* رسالة توضيحية للمستخدمين غير المصرح لهم */}
-        {!canDelete && filteredCandidates.length > 0 && (
-          <div style={{
-            backgroundColor: '#fff3cd',
-            border: '1px solid #ffeaa7',
-            borderRadius: '8px',
-            padding: '15px',
-            marginTop: '20px',
-            textAlign: 'center'
-          }}>
-            <p style={{ color: '#856404', margin: 0 }}>
-              <strong>ملاحظة:</strong> أزرار الحذف والاختيار متاحة فقط للمديرين (الأدمن). 
-              نوع المستخدم الحالي: <strong>{currentUser?.userType}</strong>
-            </p>
-          </div>
-        )}
-
-        {/* نافذة استبعاد المرشح */}
+        {/* ── Exclusion modal ── */}
         {showExclusionModal && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'white',
-              padding: '30px',
-              borderRadius: '10px',
-              maxWidth: '500px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}>
-              <h3 style={{ margin: '0 0 20px 0', color: '#2c3e50' }}>استبعاد المرشح</h3>
-              <p style={{ margin: '0 0 15px 0', color: '#7f8c8d' }}>
-                يرجى كتابة سبب الاستبعاد:
-              </p>
-              <textarea
-                value={exclusionReason}
-                onChange={(e) => setExclusionReason(e.target.value)}
-                placeholder="اكتب سبب الاستبعاد هنا..."
-                style={{
-                  width: '100%',
-                  height: '100px',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '5px',
-                  resize: 'vertical',
-                  fontSize: '14px',
-                  marginBottom: '20px'
-                }}
-              />
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => setShowExclusionModal(false)}
-                  style={{
-                    backgroundColor: '#95a5a6',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleExclusionSubmit}
-                  style={{
-                    backgroundColor: '#f39c12',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  تأكيد الاستبعاد
-                </button>
+          <div className="modal-overlay">
+            <div className="modal-box scale-in">
+              <div className="modal-header">
+                <h3>سبب الاستبعاد</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setShowExclusionModal(false)}>✕</button>
+              </div>
+              <div className="modal-body">
+                <label className="form-label">اكتب سبب الاستبعاد *</label>
+                <textarea className="form-input" value={exclusionReason} onChange={e => setExclusionReason(e.target.value)} placeholder="سبب الاستبعاد..." style={{ height: '100px', resize: 'vertical' }} />
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={() => setShowExclusionModal(false)}>إلغاء</button>
+                <button className="btn btn-warning" style={{ background: 'hsl(var(--warning))', color: 'white' }} onClick={handleExclusionSubmit}>تأكيد الاستبعاد</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* نافذة استقالة المرشح */}
+        {/* ── Resignation modal ── */}
         {showResignationModal && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'white',
-              padding: '30px',
-              borderRadius: '10px',
-              maxWidth: '500px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}>
-              <h3 style={{ margin: '0 0 20px 0', color: '#2c3e50' }}>تسجيل استقالة المرشح</h3>
-              <p style={{ margin: '0 0 15px 0', color: '#7f8c8d' }}>
-                يرجى كتابة سبب الاستقالة:
-              </p>
-              <textarea
-                value={resignationReason}
-                onChange={(e) => setResignationReason(e.target.value)}
-                placeholder="اكتب سبب الاستقالة هنا..."
-                style={{
-                  width: '100%',
-                  height: '100px',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '5px',
-                  resize: 'vertical',
-                  fontSize: '14px',
-                  marginBottom: '20px'
-                }}
-              />
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => setShowResignationModal(false)}
-                  style={{
-                    backgroundColor: '#95a5a6',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleResignationSubmit}
-                  style={{
-                    backgroundColor: '#9b59b6',
-                    color: 'white',
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  تأكيد الاستقالة
-                </button>
+          <div className="modal-overlay">
+            <div className="modal-box scale-in">
+              <div className="modal-header">
+                <h3>سبب الاستقالة</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setShowResignationModal(false)}>✕</button>
+              </div>
+              <div className="modal-body">
+                <label className="form-label">اكتب سبب الاستقالة *</label>
+                <textarea className="form-input" value={resignationReason} onChange={e => setResignationReason(e.target.value)} placeholder="سبب الاستقالة..." style={{ height: '100px', resize: 'vertical' }} />
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={() => setShowResignationModal(false)}>إلغاء</button>
+                <button className="btn btn-primary" style={{ background: 'hsl(var(--purple))', color: 'white' }} onClick={handleResignationSubmit}>تأكيد الاستقالة</button>
               </div>
             </div>
           </div>
         )}
+
       </div>
     </ProtectedLayout>
   )
