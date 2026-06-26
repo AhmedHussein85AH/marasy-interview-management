@@ -6,22 +6,35 @@ import { useTranslation } from 'react-i18next'
 
 const SecurityPage: React.FC = () => {
   const { t } = useTranslation()
-  const { currentUser, loginLogs, loadLoginLogs, getActiveSessions } = useStore()
+  const { currentUser, loginLogs, loadLoginLogs, getActiveSessions, auditLogs, loadAuditLogs } = useStore()
+  const [activeTab, setActiveTab] = useState<'logins' | 'activities'>('logins')
   const [selectedLog, setSelectedLog] = useState<string | null>(null)
   const [filterEmail, setFilterEmail] = useState('')
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
+  const [auditFilter, setAuditFilter] = useState('')
 
   useEffect(() => {
     if (currentUser?.userType === 'admin') {
       loadLoginLogs()
+      loadAuditLogs()
     }
-  }, [currentUser, loadLoginLogs])
+  }, [currentUser, loadLoginLogs, loadAuditLogs])
 
   const activeSessions = getActiveSessions()
   const filteredLogs = loginLogs.filter(log => {
     if (filterEmail && !log.userEmail.toLowerCase().includes(filterEmail.toLowerCase())) return false
     if (filterActive === 'active' && !log.isActive) return false
     if (filterActive === 'inactive' && log.isActive) return false
+    return true
+  })
+
+  const filteredAuditLogs = auditLogs.filter(log => {
+    if (auditFilter) {
+      const q = auditFilter.toLowerCase()
+      return log.userName.toLowerCase().includes(q) || 
+             log.actionType.toLowerCase().includes(q) || 
+             log.targetName.toLowerCase().includes(q)
+    }
     return true
   })
 
@@ -66,7 +79,43 @@ const SecurityPage: React.FC = () => {
             {t('security.title', 'مراقبة الأمان والأنشطة')}
           </h2>
 
-          {/* إحصائيات */}
+          {/* تبويبات */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
+            <button
+              onClick={() => setActiveTab('logins')}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: activeTab === 'logins' ? '#3498db' : 'transparent',
+                color: activeTab === 'logins' ? 'white' : '#7f8c8d',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: activeTab === 'logins' ? 'bold' : 'normal',
+                transition: 'all 0.2s'
+              }}
+            >
+              سجلات الدخول
+            </button>
+            <button
+              onClick={() => setActiveTab('activities')}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: activeTab === 'activities' ? '#3498db' : 'transparent',
+                color: activeTab === 'activities' ? 'white' : '#7f8c8d',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: activeTab === 'activities' ? 'bold' : 'normal',
+                transition: 'all 0.2s'
+              }}
+            >
+              سجلات الأنشطة
+            </button>
+          </div>
+
+          {activeTab === 'logins' ? (
+            <>
+              {/* إحصائيات الدخول */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
             <div style={{ padding: '15px', backgroundColor: '#e8f4fd', borderRadius: '8px' }}>
               <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2980b9' }}>
@@ -300,6 +349,87 @@ const SecurityPage: React.FC = () => {
               <AlertTriangle className="h-12 w-12" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
               <p>{t('security.noLogs', 'لا توجد سجلات دخول')}</p>
             </div>
+          )}
+          </>
+          ) : (
+            <>
+              {/* فلاتر سجلات الأنشطة */}
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="البحث باسم المستخدم أو الإجراء..."
+                  value={auditFilter}
+                  onChange={(e) => setAuditFilter(e.target.value)}
+                  style={{
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    flex: '1',
+                    minWidth: '200px'
+                  }}
+                />
+              </div>
+
+              {/* جدول سجلات الأنشطة */}
+              <div style={{
+                maxHeight: '600px',
+                overflowY: 'auto',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                direction: 'rtl'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+                    <tr>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المستخدم</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الإجراء</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الهدف</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الاسم / التفاصيل</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الوقت</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAuditLogs.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '12px', fontWeight: 'bold' }}>{log.userName}</td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{
+                            padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
+                            backgroundColor: 
+                              log.actionType === 'إضافة' ? '#d4edda' :
+                              log.actionType === 'تعديل' ? '#fff3cd' :
+                              log.actionType === 'قبول' ? '#d1ecf1' :
+                              log.actionType === 'رفض' || log.actionType === 'حذف' || log.actionType === 'استبعاد' ? '#f8d7da' : '#e2e3e5',
+                            color:
+                              log.actionType === 'إضافة' ? '#155724' :
+                              log.actionType === 'تعديل' ? '#856404' :
+                              log.actionType === 'قبول' ? '#0c5460' :
+                              log.actionType === 'رفض' || log.actionType === 'حذف' || log.actionType === 'استبعاد' ? '#721c24' : '#383d41'
+                          }}>
+                            {log.actionType}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px', color: '#7f8c8d' }}>{log.targetType}</td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontWeight: 'bold' }}>{log.targetName}</div>
+                          <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '4px' }}>{log.details}</div>
+                        </td>
+                        <td style={{ padding: '12px', color: '#7f8c8d', fontSize: '14px' }}>
+                          {formatDate(log.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredAuditLogs.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#7f8c8d' }}>
+                  <AlertTriangle className="h-12 w-12" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                  <p>لا توجد سجلات أنشطة حالياً</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
