@@ -43,9 +43,9 @@ export default function Users() {
     setLoading(true); setError('')
     try {
       await addUserToSupabase(newUser)
-      setNewUser({ name: '', email: '', department: '', userType: 'security_employee' })
+      setNewUser({ name: '', email: '', department: '', userType: 'security_employee', password: '' })
       setIsAdding(false)
-      alert(`✅ تم إضافة المستخدم "${newUser.name}" بنجاح!\n\n⚠️ مهم: يجب إضافته في Supabase Auth > Users بنفس البريد الإلكتروني وتحديد كلمة مرور.`)
+      alert(`✅ تم إضافة المستخدم "${newUser.name}" بنجاح!`)
     } catch (e: any) { setError(e?.message || 'فشل في إضافة المستخدم') }
     finally { setLoading(false) }
   }

@@ -101,6 +101,18 @@ export interface LoginLog {
   createdAt: string
 }
 
+// واجهة مراقبة الأنشطة (Audit Log)
+export interface AuditLog {
+  id: string
+  userId: string
+  userName: string
+  actionType: 'إضافة' | 'تعديل' | 'حذف' | 'قبول' | 'رفض' | 'استبعاد'
+  targetType: 'مرشح' | 'مستخدم' | 'مقابلة' | 'مرشح محفوظ'
+  targetName: string
+  details: string
+  createdAt: string
+}
+
 // واجهة المقابلة
 export interface Interview {
   id: string
@@ -199,6 +211,11 @@ export interface AppState {
   logLogout: (sessionId: string) => Promise<void>
   loadLoginLogs: () => Promise<void>
   getActiveSessions: () => LoginLog[]
+
+  // مراقبة الأنشطة
+  auditLogs: AuditLog[]
+  loadAuditLogs: () => Promise<void>
+  logAction: (actionType: AuditLog['actionType'], targetType: AuditLog['targetType'], targetName: string, details: string) => Promise<void>
   }
 
 // متغيرات لتخزين الاشتراكات
@@ -218,6 +235,7 @@ export const useStore = create<AppState>()(
       notifications: [],
       interviews: [],
       loginLogs: [],
+      auditLogs: [],
       stats: {
         totalCandidates: 0,
         pendingInterviews: 0,
@@ -312,7 +330,7 @@ export const useStore = create<AppState>()(
           // جلب بيانات المستخدم من جدول users في Supabase (بدون حساسية الأحرف)
           const { data, error } = await supabase
             .from('users')
-            .select('id, name, email, user_type, department, created_at, is_active')
+            .select('id, name, email, user_type, department, created_at, is_active, permissions')
             .ilike('email', email.trim())
             .maybeSingle()
 
@@ -337,7 +355,7 @@ export const useStore = create<AppState>()(
             department: data.department,
             createdAt: data.created_at,
             isActive: data.is_active ?? true,
-            permissions: (data as any).permissions || undefined,
+            permissions: data.permissions ? (data.permissions as any) : undefined,
           }
 
           set({ currentUser: mappedUser })
@@ -518,6 +536,9 @@ export const useStore = create<AppState>()(
           }))
 
           console.log('تم إضافة المرشح بنجاح إلى قاعدة البيانات')
+          
+          // تسجيل النشاط
+          get().logAction('إضافة', 'مرشح', candidateData.name, `تم إضافة مرشح جديد برقم قومي: ${candidateData.nationalId}`)
         } catch (error) {
           console.error('خطأ في إضافة المرشح:', error)
           throw error
@@ -617,6 +638,14 @@ export const useStore = create<AppState>()(
                 notes,
                 workShift
               )
+              
+              // تسجيل النشاط للقرار
+              get().logAction(
+                offerResult === 'مقبول' ? 'قبول' : offerResult === 'مرفوض' ? 'رفض' : 'استبعاد',
+                'مرشح',
+                candidate.name,
+                `القرار: ${offerResult} - الملاحظات: ${notes || 'لا يوجد'}`
+              )
             }
           }
         } catch (error) {
@@ -650,6 +679,11 @@ export const useStore = create<AppState>()(
               totalCandidates: Math.max(0, state.stats.totalCandidates - 1)
             }
           }))
+
+          const deletedCandidate = get().candidates.find(c => c.id === id)
+          if (deletedCandidate) {
+            get().logAction('حذف', 'مرشح', deletedCandidate.name, 'تم حذف بيانات المرشح نهائياً')
+          }
         } catch (error) {
           console.error('خطأ في حذف المرشح:', error)
           throw error
@@ -1096,50 +1130,51 @@ export const useStore = create<AppState>()(
       // تحميل البيانات من Supabase
       loadDataFromSupabase: async () => {
         try {
+          // دالة مساعدة لجلب كل البيانات بتخطي حد الـ 1000
+          const fetchAll = async (table: string) => {
+            let allData: any[] = []
+            let from = 0
+            const limit = 1000
+            let hasMore = true
+
+            while (hasMore) {
+              const { data, error } = await supabase
+                .from(table)
+                .select('*')
+                .order('created_at', { ascending: false })
+                .range(from, from + limit - 1)
+              
+              if (error) {
+                console.error(`خطأ في تحميل ${table}:`, error)
+                return { data: null, error }
+              }
+              
+              if (data && data.length > 0) {
+                allData = [...allData, ...data]
+                from += limit
+                if (data.length < limit) hasMore = false
+              } else {
+                hasMore = false
+              }
+            }
+            return { data: allData, error: null }
+          }
 
           // تحميل المرشحين
-          const { data: candidates, error: candidatesError } = await supabase
-            .from('candidates')
-            .select('*')
-            .order('created_at', { ascending: false })
-
-          if (candidatesError) {
-            console.error('خطأ في تحميل المرشحين:', candidatesError)
-            console.error('تفاصيل الخطأ:', candidatesError.message)
-          }
+          const { data: candidates, error: candidatesError } = await fetchAll('candidates')
+          if (candidatesError) console.error('خطأ في تحميل المرشحين:', candidatesError.message)
 
           // تحميل المقابلات
-          const { data: interviews, error: interviewsError } = await supabase
-            .from('interviews')
-            .select('*')
-            .order('created_at', { ascending: false })
-
-          if (interviewsError) {
-            console.error('خطأ في تحميل المقابلات:', interviewsError)
-            console.error('تفاصيل الخطأ:', interviewsError.message)
-          }
+          const { data: interviews, error: interviewsError } = await fetchAll('interviews')
+          if (interviewsError) console.error('خطأ في تحميل المقابلات:', interviewsError.message)
 
           // تحميل المرشحين المحفوظين
-          const { data: savedCandidates, error: savedError } = await supabase
-            .from('saved_candidates')
-            .select('*')
-            .order('created_at', { ascending: false })
-
-          if (savedError) {
-            console.error('خطأ في تحميل المرشحين المحفوظين:', savedError)
-            console.error('تفاصيل الخطأ:', savedError.message)
-          }
+          const { data: savedCandidates, error: savedError } = await fetchAll('saved_candidates')
+          if (savedError) console.error('خطأ في تحميل المرشحين المحفوظين:', savedError.message)
 
           // تحميل الإشعارات
-          const { data: notifications, error: notificationsError } = await supabase
-            .from('notifications')
-            .select('*')
-            .order('created_at', { ascending: false })
-
-          if (notificationsError) {
-            console.error('خطأ في تحميل الإشعارات:', notificationsError)
-            console.error('تفاصيل الخطأ:', notificationsError.message)
-          }
+          const { data: notifications, error: notificationsError } = await fetchAll('notifications')
+          if (notificationsError) console.error('خطأ في تحميل الإشعارات:', notificationsError.message)
 
           // حساب الإحصائيات
           const stats: DashboardStats = {
@@ -1219,7 +1254,7 @@ export const useStore = create<AppState>()(
             isInitialized: true
           })
 
-          console.log('تم تحميل البيانات من Supabase بنجاح')
+          // console.log('تم تحميل البيانات من Supabase بنجاح')
         } catch (error) {
           console.error('خطأ في تحميل البيانات:', error)
         }
@@ -1272,12 +1307,12 @@ export const useStore = create<AppState>()(
 
       // تهيئة البيانات التجريبية
       initializeDemoData: async () => {
-        console.log('بدء تهيئة البيانات التجريبية...')
+        // console.log('بدء تهيئة البيانات التجريبية...')
         
         // محاولة استعادة جلسة المستخدم أولاً
         const sessionRestored = get().restoreUserSession()
         if (sessionRestored) {
-          console.log('تم استعادة جلسة المستخدم بنجاح')
+          // console.log('تم استعادة جلسة المستخدم بنجاح')
         }
         
         // إنشاء المستخدمين التجريبيين دائماً
@@ -1308,7 +1343,7 @@ export const useStore = create<AppState>()(
           }
         ]
 
-        console.log('إنشاء المستخدمين التجريبيين:', demoUsers.map(u => u.email))
+        // console.log('إنشاء المستخدمين التجريبيين:', demoUsers.map(u => u.email))
 
         // تحديث المستخدمين
         set({
@@ -1320,11 +1355,26 @@ export const useStore = create<AppState>()(
         await get().loadDataFromSupabase()
         await get().loadUsersFromSupabase()
 
+        // تحديث بيانات المستخدم الحالي من قائمة المستخدمين المحملة حديثاً من قاعدة البيانات لضمان تحديث الصلاحيات والحالة النشطة
+        const currentRestoredUser = get().currentUser
+        if (currentRestoredUser) {
+          const freshUser = get().users.find(u => u.email.toLowerCase() === currentRestoredUser.email.toLowerCase())
+          if (freshUser) {
+            if (freshUser.isActive === false) {
+              console.log('الحساب معطل، جاري تسجيل الخروج تلقائياً')
+              await get().logout()
+            } else {
+              set({ currentUser: freshUser })
+              get().saveUserSession(freshUser)
+            }
+          }
+        }
+
         // إعداد الاشتراكات التلقائية
         get().setupRealtimeSubscriptions()
 
-        console.log('تم تهيئة البيانات التجريبية بنجاح')
-        console.log('المستخدمون المتاحون:', demoUsers.map(u => u.email))
+        // console.log('تم تهيئة البيانات التجريبية بنجاح')
+        // console.log('المستخدمون المتاحون:', demoUsers.map(u => u.email))
       },
 
       // تحميل المستخدمين من Supabase
@@ -1332,7 +1382,7 @@ export const useStore = create<AppState>()(
         try {
           const { data, error } = await supabase
             .from('users')
-            .select('id, name, email, user_type, department, created_at, is_active')
+            .select('id, name, email, user_type, department, created_at, is_active, permissions')
             .order('created_at', { ascending: false })
           
           if (!error && data) {
@@ -1343,7 +1393,8 @@ export const useStore = create<AppState>()(
               userType: u.user_type as UserType,
               department: u.department,
               createdAt: u.created_at,
-              isActive: u.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
+              isActive: u.is_active ?? true, // افتراضياً نشط إذا كانت القيمة null
+              permissions: u.permissions ? (u.permissions as any) : undefined
             }))
             set({ users: mapped })
           }
@@ -1354,30 +1405,23 @@ export const useStore = create<AppState>()(
 
       // إضافة مستخدم إلى Supabase
       addUserToSupabase: async (user) => {
-        // استخدام Edge Function لإنشاء المستخدم في Auth + جدول users
-        const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`
-        const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-        const response = await fetch(FUNCTION_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${ANON_KEY}`,
-          },
-          body: JSON.stringify({
-            email: user.email,
-            password: user.password || 'TempPass@123',
-            name: user.name,
-            department: user.department,
-            userType: user.userType,
-          }),
+        // استخدام دالة Postgres (RPC) لإنشاء المستخدم لتخطي مشاكل الـ Edge Functions و الـ CORS
+        const { data, error } = await supabase.rpc('create_user_admin', {
+          email: user.email,
+          password: user.password || 'TempPass@123',
+          name: user.name,
+          department: user.department,
+          user_type: user.userType
         })
 
-        const result = await response.json()
-        if (!response.ok) throw new Error(result.error || 'فشل في إنشاء المستخدم')
+        if (error) {
+          console.error('خطأ في إنشاء المستخدم عبر RPC:', error)
+          throw new Error(error.message || 'فشل في إنشاء المستخدم')
+        }
 
         // تحديث القائمة المحلية
         await get().loadUsersFromSupabase()
+        get().logAction('إضافة', 'مستخدم', user.name, `نوع المستخدم: ${user.userType}`)
       },
 
       // تحديث دور المستخدم
@@ -1421,11 +1465,15 @@ export const useStore = create<AppState>()(
           }
 
           // تحديث الحالة المحلية
+          const deletedUser = get().users.find(u => u.id === id)
           set(state => ({
             users: state.users.filter(u => u.id !== id)
           }))
 
           console.log('تم حذف المستخدم بنجاح')
+          if (deletedUser) {
+            get().logAction('حذف', 'مستخدم', deletedUser.name, 'تم حذف حساب المستخدم')
+          }
         } catch (error) {
           console.error('خطأ في حذف المستخدم:', error)
           throw error
@@ -1490,9 +1538,22 @@ export const useStore = create<AppState>()(
             .update({ permissions: permissions as any })
             .eq('id', id)
           if (error) throw error
-          set(state => ({
-            users: state.users.map(u => u.id === id ? { ...u, permissions } : u)
-          }))
+          set(state => {
+            const updatedUsers = state.users.map(u => u.id === id ? { ...u, permissions } : u)
+            const isSelf = state.currentUser?.id === id
+            const updatedCurrentUser = isSelf && state.currentUser
+              ? { ...state.currentUser, permissions }
+              : state.currentUser
+
+            if (isSelf && updatedCurrentUser) {
+              localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser))
+            }
+
+            return {
+              users: updatedUsers,
+              currentUser: updatedCurrentUser
+            }
+          })
         } catch (error) {
           console.error('خطأ في تحديث الصلاحيات:', error)
           throw error
@@ -1861,7 +1922,7 @@ export const useStore = create<AppState>()(
 
       // إعداد الاشتراكات التلقائية من Supabase
       setupRealtimeSubscriptions: () => {
-        console.log('🔔 إعداد الاشتراكات التلقائية...')
+        // console.log('🔔 إعداد الاشتراكات التلقائية...')
         
         // تنظيف الاشتراكات السابقة
         get().cleanupRealtimeSubscriptions()
@@ -1918,12 +1979,12 @@ export const useStore = create<AppState>()(
           )
           .subscribe()
 
-        console.log('✅ تم إعداد الاشتراكات التلقائية بنجاح')
+        // console.log('✅ تم إعداد الاشتراكات التلقائية بنجاح')
       },
 
       // تنظيف الاشتراكات
       cleanupRealtimeSubscriptions: () => {
-        console.log('🧹 تنظيف الاشتراكات...')
+        // console.log('🧹 تنظيف الاشتراكات...')
         
         if (candidatesSubscription) {
           supabase.removeChannel(candidatesSubscription)
@@ -1945,7 +2006,7 @@ export const useStore = create<AppState>()(
           notificationsSubscription = null
         }
         
-        console.log('✅ تم تنظيف الاشتراكات')
+        // console.log('✅ تم تنظيف الاشتراكات')
       },
 
       // دالة للحصول على معلومات الجهاز والموقع
@@ -2157,6 +2218,86 @@ export const useStore = create<AppState>()(
       getActiveSessions: () => {
         const { loginLogs } = get()
         return loginLogs.filter(log => log.isActive)
+      },
+
+      // تحميل سجلات الأنشطة
+      loadAuditLogs: async () => {
+        const { currentUser } = get()
+        if (!currentUser || currentUser.userType !== 'admin') return
+
+        try {
+          const { data, error } = await supabase
+            .from('audit_logs')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(1000)
+
+          if (error) {
+            console.error('خطأ في تحميل سجلات الأنشطة:', error)
+            return
+          }
+
+          const transformedLogs: AuditLog[] = (data || []).map(log => ({
+            id: log.id,
+            userId: log.user_id,
+            userName: log.user_name,
+            actionType: log.action_type as AuditLog['actionType'],
+            targetType: log.target_type as AuditLog['targetType'],
+            targetName: log.target_name,
+            details: log.details,
+            createdAt: log.created_at
+          }))
+
+          set({ auditLogs: transformedLogs })
+        } catch (error) {
+          console.error('خطأ في تحميل سجلات الأنشطة:', error)
+        }
+      },
+
+      // تسجيل نشاط جديد
+      logAction: async (actionType, targetType, targetName, details) => {
+        const { currentUser } = get()
+        if (!currentUser) return
+
+        try {
+          const newLog = {
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            action_type: actionType,
+            target_type: targetType,
+            target_name: targetName,
+            details: details
+          }
+
+          const { data, error } = await supabase
+            .from('audit_logs')
+            .insert([newLog])
+            .select()
+            .single()
+
+          if (error) {
+            console.error('خطأ في تسجيل النشاط:', error)
+            return
+          }
+
+          // تحديث الحالة المحلية فقط إذا تم التحميل مسبقاً
+          const transformedLog: AuditLog = {
+            id: data.id,
+            userId: data.user_id,
+            userName: data.user_name,
+            actionType: data.action_type as AuditLog['actionType'],
+            targetType: data.target_type as AuditLog['targetType'],
+            targetName: data.target_name,
+            details: data.details,
+            createdAt: data.created_at
+          }
+
+          set(state => ({
+            auditLogs: [transformedLog, ...state.auditLogs]
+          }))
+        } catch (error) {
+          console.error('خطأ في تسجيل النشاط:', error)
+        }
       },
 
       // إضافة وظيفة set للوصول المباشر
