@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { GOVERNORATES } from '../constants/lists'
@@ -36,12 +36,13 @@ const CandidatesPage: React.FC = () => {
   const [filteredCandidates, setFilteredCandidates] = useState(candidates)
   const [showDecisionModal, setShowDecisionModal] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null)
-  const [decisionResult, setDecisionResult] = useState<'مقبول' | 'مرفوض' | ''>('')
+  const [decisionResult, setDecisionResult] = useState<'مقبول' | 'مرفوض' | 'مستبعد' | ''>('')
   const [decisionNotes, setDecisionNotes] = useState('')
   const [workShift, setWorkShift] = useState<'نهار' | 'ليل' | ''>('')
   const [workLocation, setWorkLocation] = useState('')
   const [startDate, setStartDate] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
+  const [exclusionReason, setExclusionReason] = useState('')
   const [newCandidate, setNewCandidate] = useState(EMPTY_CANDIDATE)
   const [editCandidate, setEditCandidate] = useState<any>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -73,12 +74,13 @@ const CandidatesPage: React.FC = () => {
     const candidate = candidates.find(c => c.id === id)
     if (candidate) {
       setSelectedCandidate(candidate)
-      setDecisionResult(result as 'مقبول' | 'مرفوض')
+      setDecisionResult(result as 'مقبول' | 'مرفوض' | 'مستبعد')
       setDecisionNotes('')
       setWorkShift('')
       setWorkLocation('')
       setStartDate('')
       setRejectionReason('')
+      setExclusionReason('')
       setShowDecisionModal(true)
     }
   }
@@ -92,18 +94,19 @@ const CandidatesPage: React.FC = () => {
         decisionResult === 'مقبول' && workLocation ? `الموقع: ${workLocation}` : '',
         decisionResult === 'مقبول' && startDate ? `تاريخ البداية: ${startDate}` : '',
         decisionResult === 'مرفوض' && rejectionReason ? `سبب الرفض: ${rejectionReason}` : '',
+        decisionResult === 'مستبعد' && exclusionReason ? `سبب الاستبعاد: ${exclusionReason}` : '',
       ].filter(Boolean).join(' | ') || undefined
 
       await updateCandidateStatus(
         selectedCandidate.id,
-        decisionResult === 'مقبول' ? 'تم التوظيف' : 'مرفوض',
+        decisionResult === 'مقبول' ? 'تم التوظيف' : decisionResult === 'مرفوض' ? 'مرفوض' : 'مستبعد',
         decisionResult as any,
         fullNotes,
         workShift as 'نهار' | 'ليل' || undefined
       )
-      if (decisionResult === 'مقبول' || decisionResult === 'مرفوض') {
+      if (['مقبول', 'مرفوض', 'مستبعد'].includes(decisionResult)) {
         const updated = candidates.find(c => c.id === selectedCandidate.id)
-        if (updated) await saveCandidateToDatabase(updated, decisionResult as any, fullNotes, workShift as 'نهار' | 'ليل' || undefined)
+        if (updated) await saveCandidateToDatabase(updated, decisionResult as any, fullNotes, workShift as 'نهار' | 'ليل' || undefined, decisionResult === 'مستبعد' ? exclusionReason : undefined)
       }
       alert(t('candidates.alerts.statusUpdated', 'تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح'))
       setShowDecisionModal(false)
@@ -114,6 +117,7 @@ const CandidatesPage: React.FC = () => {
       setWorkLocation('')
       setStartDate('')
       setRejectionReason('')
+      setExclusionReason('')
     } catch (error) {
       console.error('Error saving decision:', error)
       alert(t('candidates.alerts.statusUpdateError', 'حدث خطأ في حفظ القرار'))
@@ -317,6 +321,7 @@ const CandidatesPage: React.FC = () => {
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button className="btn btn-success btn-sm" onClick={() => handleStatusUpdate(candidate.id,'تم التوظيف','مقبول')}>قبول</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleStatusUpdate(candidate.id,'مرفوض','مرفوض')}>رفض</button>
+                          <button className="btn btn-warning btn-sm" onClick={() => handleStatusUpdate(candidate.id,'مستبعد','مستبعد')}>استبعاد</button>
                         </div>
                       </td>
                     )}
@@ -418,7 +423,7 @@ const CandidatesPage: React.FC = () => {
           <div className="modal-overlay">
             <div className="modal-box">
               <div className="modal-header">
-                <h3>{decisionResult === 'مقبول' ? '✅ قبول المرشح' : '❌ رفض المرشح'}: {selectedCandidate?.name}</h3>
+                <h3>{decisionResult === 'مقبول' ? '✅ قبول المرشح' : decisionResult === 'مرفوض' ? '❌ رفض المرشح' : '⚠️ استبعاد المرشح'}: {selectedCandidate?.name}</h3>
                 <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setShowDecisionModal(false)}>✕</button>
               </div>
               <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -461,6 +466,14 @@ const CandidatesPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* سبب الاستبعاد */}
+                {decisionResult === 'مستبعد' && (
+                  <div>
+                    <label className="form-label">سبب الاستبعاد</label>
+                    <textarea className="form-input" value={exclusionReason} onChange={e => setExclusionReason(e.target.value)} placeholder="اذكر سبب الاستبعاد..." style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                )}
+
                 {/* الملاحظات */}
                 <div>
                   <label className="form-label">ملاحظات إضافية (اختياري)</label>
@@ -470,7 +483,7 @@ const CandidatesPage: React.FC = () => {
               </div>
               <div className="modal-footer">
                 <button className="btn btn-ghost" onClick={() => setShowDecisionModal(false)}>إلغاء</button>
-                <button className={`btn ${decisionResult === 'مقبول' ? 'btn-success' : 'btn-danger'}`} onClick={handleSubmitDecision}>
+                <button className={`btn ${decisionResult === 'مقبول' ? 'btn-success' : decisionResult === 'مرفوض' ? 'btn-danger' : 'btn-warning'}`} onClick={handleSubmitDecision}>
                   تأكيد القرار
                 </button>
               </div>

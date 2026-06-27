@@ -6,8 +6,21 @@ import { Users, UserCheck, CalendarClock, CalendarCheck2, TrendingUp } from 'luc
 import { useTranslation } from 'react-i18next'
 
 const DashboardPage: React.FC = () => {
-  const { currentUser, candidates, interviews, getUnreadNotifications } = useStore()
+  const { currentUser, candidates, savedCandidates, interviews, auditLogs, loadAuditLogs, getUnreadNotifications } = useStore()
   const { t } = useTranslation()
+
+  React.useEffect(() => {
+    if (auditLogs.length === 0) {
+      loadAuditLogs()
+    }
+  }, [loadAuditLogs, auditLogs.length])
+
+  const mergedCandidates = React.useMemo(() => {
+    const map = new Map<string, any>()
+    savedCandidates.forEach(sc => map.set(sc.nationalId, { ...sc, offerResult: sc.finalResult }))
+    candidates.forEach(c => map.set(c.nationalId, c))
+    return Array.from(map.values())
+  }, [candidates, savedCandidates])
 
   const getWelcomeMessage = () => {
     const welcome = t('dashboard.welcome')
@@ -43,13 +56,13 @@ const DashboardPage: React.FC = () => {
   }
 
   const getHiredCandidates = () => {
-    return candidates.filter(c => c.offerResult === 'مقبول').length
+    return mergedCandidates.filter(c => c.offerResult === 'مقبول').length
   }
 
   const unreadNotifications = getUnreadNotifications()
 
   const stats = [
-    { label: t('dashboard.stats.totalCandidates'),  value: candidates.length,        icon: Users,           color: 'blue' },
+    { label: t('dashboard.stats.totalCandidates'),  value: mergedCandidates.length,        icon: Users,           color: 'blue' },
     { label: t('dashboard.stats.newCandidates'),       value: getNewCandidates(),        icon: UserCheck,       color: 'green' },
     { label: t('dashboard.stats.pendingInterviews'),   value: getPendingInterviews(),    icon: CalendarClock,   color: 'orange' },
     { label: t('dashboard.stats.completedInterviews'),   value: getCompletedInterviews(),  icon: CalendarCheck2,  color: 'purple' },
@@ -126,8 +139,8 @@ const DashboardPage: React.FC = () => {
               <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{t('dashboard.recentActivity.subtitle')}</span>
             </div>
             <div className="section-card-body" style={{ padding: '8px 0' }}>
-              {candidates.slice(-5).reverse().map(candidate => (
-                <div key={candidate.id} className="activity-item">
+              {auditLogs.slice(0, 5).map(log => (
+                <div key={log.id} className="activity-item">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{
                       width: '34px', height: '34px',
@@ -137,23 +150,23 @@ const DashboardPage: React.FC = () => {
                       fontSize: '13px', fontWeight: 700, color: 'hsl(var(--primary))',
                       flexShrink: 0
                     }}>
-                      {candidate.name.charAt(0)}
+                      {log.actionType.charAt(0)}
                     </div>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-                        {candidate.name}
+                        {log.userName} - {log.actionType}
                       </div>
                       <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
-                        {candidate.governorate} · {candidate.qualification}
+                        {log.targetName} ({log.targetType})
                       </div>
                     </div>
                   </div>
-                  <span className={getStatusBadge(candidate.offerResult)}>
-                    {getStatusTranslation(candidate.offerResult)}
+                  <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
+                    {new Date(log.createdAt).toLocaleDateString()}
                   </span>
                 </div>
               ))}
-              {candidates.length === 0 && (
+              {auditLogs.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '24px', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>
                   {t('dashboard.recentActivity.noActivity')}
                 </div>

@@ -65,22 +65,22 @@ const App: React.FC = () => {
             </ProtectedLayout>
           } />
           <Route path="/users" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissionKey="canManageUsers">
               <Users />
             </ProtectedLayout>
           } />
           <Route path="/bulk-upload" element={
-            <ProtectedLayout requiredPermissions={['security_employee', 'admin']}>
+            <ProtectedLayout requiredPermissionKey="canBulkUpload">
               <BulkUploadPage />
             </ProtectedLayout>
           } />
           <Route path="/settings" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissionKey="canAccessSettings">
               <SettingsPage />
             </ProtectedLayout>
           } />
           <Route path="/security" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissionKey="canViewSecurity">
               <SecurityPage />
             </ProtectedLayout>
           } />

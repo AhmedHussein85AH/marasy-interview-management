@@ -60,7 +60,41 @@ const exportCSV = (rows: string[][], filename: string) => {
 
 // ─────────────────────────────────────────────────────────
 const AnalyticsPage: React.FC = () => {
-  const { candidates } = useStore()
+  const { candidates, savedCandidates } = useStore()
+  
+  const mergedCandidates = React.useMemo(() => {
+    const map = new Map<string, any>()
+    
+    savedCandidates.forEach(sc => {
+      map.set(sc.nationalId, {
+        name: sc.name,
+        nationalId: sc.nationalId,
+        governorate: sc.governorate,
+        qualification: sc.qualification,
+        securityCompany: sc.securityCompany,
+        position: sc.position,
+        offerResult: sc.finalResult,
+        offerDate: sc.offerDate,
+        addDate: sc.createdAt
+      })
+    })
+
+    candidates.forEach(c => {
+      map.set(c.nationalId, {
+        name: c.name,
+        nationalId: c.nationalId,
+        governorate: c.governorate,
+        qualification: c.qualification,
+        securityCompany: c.securityCompany,
+        position: c.position,
+        offerResult: c.offerResult,
+        offerDate: c.offerDate,
+        addDate: c.createdAt
+      })
+    })
+
+    return Array.from(map.values())
+  }, [candidates, savedCandidates])
   const { theme } = useTheme()
   const { t } = useTranslation()
 
@@ -71,23 +105,25 @@ const AnalyticsPage: React.FC = () => {
   const cursorColor  = theme === 'dark' ? '#1e293b' : '#f8fafc'
   const legendColor  = theme === 'dark' ? '#94a3b8' : '#475569'
 
-  const total      = candidates.length
-  const hired      = candidates.filter(c => c.offerResult === 'مقبول').length
-  const rejected   = candidates.filter(c => c.offerResult === 'مرفوض').length
-  const excluded   = candidates.filter(c => c.offerResult === 'مستبعد').length
-  const pending    = candidates.filter(c => c.offerResult === 'في انتظار').length
+  const total      = mergedCandidates.length
+  const hired      = mergedCandidates.filter(c => c.offerResult === 'مقبول').length
+  const rejected   = mergedCandidates.filter(c => c.offerResult === 'مرفوض').length
+  const excluded   = mergedCandidates.filter(c => c.offerResult === 'مستبعد').length
+  const pending    = mergedCandidates.filter(c => c.offerResult === 'في انتظار').length
+  const resigned   = mergedCandidates.filter(c => c.offerResult === 'استقالة').length
   const successPct = total > 0 ? ((hired / total) * 100).toFixed(1) : '0'
 
   // pie data
   const pieData = [
-    { name: t('status.accepted'),      value: hired    },
-    { name: t('status.rejected'),      value: rejected },
-    { name: t('status.excluded'),     value: excluded },
-    { name: t('status.pending'), value: pending  },
+    { name: t('status.accepted', 'مقبول'),      value: hired    },
+    { name: t('status.rejected', 'مرفوض'),      value: rejected },
+    { name: t('status.excluded', 'مستبعد'),     value: excluded },
+    { name: t('status.pending', 'في انتظار'), value: pending  },
+    { name: t('status.resigned', 'استقالة'), value: resigned  },
   ].filter(d => d.value > 0)
 
   // bar – governorates top 10
-  const govMap = candidates.reduce((acc, c) => {
+  const govMap = mergedCandidates.reduce((acc, c) => {
     if (c.governorate) acc[c.governorate] = (acc[c.governorate] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -97,7 +133,7 @@ const AnalyticsPage: React.FC = () => {
     .map(([name, value]) => ({ name, value }))
 
   // bar – qualifications
-  const qualMap = candidates.reduce((acc, c) => {
+  const qualMap = mergedCandidates.reduce((acc, c) => {
     if (c.qualification) acc[c.qualification] = (acc[c.qualification] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -106,7 +142,7 @@ const AnalyticsPage: React.FC = () => {
     .map(([name, value]) => ({ name, value }))
 
   // bar – companies
-  const compMap = candidates.reduce((acc, c) => {
+  const compMap = mergedCandidates.reduce((acc, c) => {
     if (c.securityCompany) acc[c.securityCompany] = (acc[c.securityCompany] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -127,7 +163,7 @@ const AnalyticsPage: React.FC = () => {
         t('database.columns.finalResult'), 
         t('candidates.columns.addDate')
       ],
-      ...candidates.map(c => [
+      ...mergedCandidates.map(c => [
         c.name, c.nationalId, c.governorate, c.qualification,
         c.securityCompany, c.position || '', c.offerResult, c.offerDate,
       ]),
@@ -136,7 +172,7 @@ const AnalyticsPage: React.FC = () => {
   }
 
   const handleExportExcel = () => {
-    const data = candidates.map(c => ({
+    const data = mergedCandidates.map(c => ({
       [t('candidates.columns.name')]:        c.name,
       [t('candidates.columns.nationalId')]:  c.nationalId,
       [t('candidates.columns.governorate')]: c.governorate,
