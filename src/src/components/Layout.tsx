@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { useTheme } from '../context/ThemeContext'
 import { useTranslation } from 'react-i18next'
+import { usePermissions } from '../hooks/usePermissions'
 import Footer from './Footer'
 import {
   LayoutDashboard, Users, BarChart3,
@@ -12,14 +13,14 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { path: '/dashboard',   labelKey: 'dashboard',     icon: LayoutDashboard, permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/candidates',  labelKey: 'candidates',    icon: Users,           permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/analytics',   labelKey: 'analytics',     icon: BarChart3,       permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/database',    labelKey: 'database',      icon: Database,        permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/bulk-upload', labelKey: 'bulkUpload',    icon: Upload,          permissions: ['security_employee', 'admin'] },
-  { path: '/users',       labelKey: 'users',         icon: UserCog,         permissions: ['admin'] },
-  { path: '/settings',    labelKey: 'settings',      icon: Settings,        permissions: ['admin'] },
-  { path: '/security',    labelKey: 'security',      icon: ShieldCheck,     permissions: ['admin'] },
+  { path: '/dashboard',   labelKey: 'dashboard',     icon: LayoutDashboard, permissionKey: null },
+  { path: '/candidates',  labelKey: 'candidates',    icon: Users,           permissionKey: 'canViewCandidates' },
+  { path: '/analytics',   labelKey: 'analytics',     icon: BarChart3,       permissionKey: 'canViewAnalytics' },
+  { path: '/database',    labelKey: 'database',      icon: Database,        permissionKey: 'canViewDatabase' },
+  { path: '/bulk-upload', labelKey: 'bulkUpload',    icon: Upload,          permissionKey: 'canBulkUpload' },
+  { path: '/users',       labelKey: 'users',         icon: UserCog,         permissionKey: 'canManageUsers' },
+  { path: '/settings',    labelKey: 'settings',      icon: Settings,        permissionKey: 'canAccessSettings' },
+  { path: '/security',    labelKey: 'security',      icon: ShieldCheck,     permissionKey: 'canViewSecurity' },
 ]
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -28,15 +29,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { theme, toggleTheme } = useTheme()
   const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
+  const permissions = usePermissions()
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'ar' : 'en'
     i18n.changeLanguage(newLang)
   }
 
-  const filtered = NAV_ITEMS.filter(item =>
-    currentUser && item.permissions.includes(currentUser.userType)
-  )
+  const filtered = NAV_ITEMS.filter(item => {
+    if (!currentUser) return false
+    if (!item.permissionKey) return true
+    return permissions[item.permissionKey as keyof typeof permissions] === true
+  })
 
   const handleLogout = () => {
     if (window.confirm(t('layout.logoutConfirm', 'هل أنت متأكد من تسجيل الخروج؟'))) logout()

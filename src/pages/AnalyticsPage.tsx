@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  LineChart, Line, ComposedChart,
 } from 'recharts'
 import { useTranslation } from 'react-i18next'
 
@@ -60,7 +61,41 @@ const exportCSV = (rows: string[][], filename: string) => {
 
 // ─────────────────────────────────────────────────────────
 const AnalyticsPage: React.FC = () => {
-  const { candidates } = useStore()
+  const { candidates, savedCandidates } = useStore()
+  
+  const mergedCandidates = React.useMemo(() => {
+    const map = new Map<string, any>()
+    
+    savedCandidates.forEach(sc => {
+      map.set(sc.nationalId, {
+        name: sc.name,
+        nationalId: sc.nationalId,
+        governorate: sc.governorate,
+        qualification: sc.qualification,
+        securityCompany: sc.securityCompany,
+        position: sc.position,
+        offerResult: sc.finalResult,
+        offerDate: sc.offerDate,
+        addDate: sc.createdAt
+      })
+    })
+
+    candidates.forEach(c => {
+      map.set(c.nationalId, {
+        name: c.name,
+        nationalId: c.nationalId,
+        governorate: c.governorate,
+        qualification: c.qualification,
+        securityCompany: c.securityCompany,
+        position: c.position,
+        offerResult: c.offerResult,
+        offerDate: c.offerDate,
+        addDate: c.createdAt
+      })
+    })
+
+    return Array.from(map.values())
+  }, [candidates, savedCandidates])
   const { theme } = useTheme()
   const { t } = useTranslation()
 
@@ -71,23 +106,25 @@ const AnalyticsPage: React.FC = () => {
   const cursorColor  = theme === 'dark' ? '#1e293b' : '#f8fafc'
   const legendColor  = theme === 'dark' ? '#94a3b8' : '#475569'
 
-  const total      = candidates.length
-  const hired      = candidates.filter(c => c.offerResult === 'مقبول').length
-  const rejected   = candidates.filter(c => c.offerResult === 'مرفوض').length
-  const excluded   = candidates.filter(c => c.offerResult === 'مستبعد').length
-  const pending    = candidates.filter(c => c.offerResult === 'في انتظار').length
+  const total      = mergedCandidates.length
+  const hired      = mergedCandidates.filter(c => c.offerResult === 'مقبول').length
+  const rejected   = mergedCandidates.filter(c => c.offerResult === 'مرفوض').length
+  const excluded   = mergedCandidates.filter(c => c.offerResult === 'مستبعد').length
+  const pending    = mergedCandidates.filter(c => c.offerResult === 'في انتظار').length
+  const resigned   = mergedCandidates.filter(c => c.offerResult === 'استقالة').length
   const successPct = total > 0 ? ((hired / total) * 100).toFixed(1) : '0'
 
   // pie data
   const pieData = [
-    { name: t('status.accepted'),      value: hired    },
-    { name: t('status.rejected'),      value: rejected },
-    { name: t('status.excluded'),     value: excluded },
-    { name: t('status.pending'), value: pending  },
+    { name: t('status.accepted', 'مقبول'),      value: hired    },
+    { name: t('status.rejected', 'مرفوض'),      value: rejected },
+    { name: t('status.excluded', 'مستبعد'),     value: excluded },
+    { name: t('status.pending', 'في انتظار'), value: pending  },
+    { name: t('status.resigned', 'استقالة'), value: resigned  },
   ].filter(d => d.value > 0)
 
   // bar – governorates top 10
-  const govMap = candidates.reduce((acc, c) => {
+  const govMap = mergedCandidates.reduce((acc, c) => {
     if (c.governorate) acc[c.governorate] = (acc[c.governorate] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -97,7 +134,7 @@ const AnalyticsPage: React.FC = () => {
     .map(([name, value]) => ({ name, value }))
 
   // bar – qualifications
-  const qualMap = candidates.reduce((acc, c) => {
+  const qualMap = mergedCandidates.reduce((acc, c) => {
     if (c.qualification) acc[c.qualification] = (acc[c.qualification] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -106,13 +143,55 @@ const AnalyticsPage: React.FC = () => {
     .map(([name, value]) => ({ name, value }))
 
   // bar – companies
-  const compMap = candidates.reduce((acc, c) => {
+  const compMap = mergedCandidates.reduce((acc, c) => {
     if (c.securityCompany) acc[c.securityCompany] = (acc[c.securityCompany] || 0) + 1
     return acc
   }, {} as Record<string, number>)
   const compData = Object.entries(compMap)
     .sort(([, a], [, b]) => b - a)
     .map(([name, value]) => ({ name, value }))
+
+  // trends over time (monthly acceptance rate)
+  const trendMap = mergedCandidates.reduce((acc, c) => {
+    const date = c.addDate || c.offerDate
+    if (date) {
+      const month = date.slice(0, 7)
+      if (!acc[month]) acc[month] = { total: 0, hired: 0 }
+      acc[month].total++
+      if (c.offerResult === 'مقبول') acc[month].hired++
+    }
+    return acc
+  }, {} as Record<string, { total: number; hired: number }>)
+  const trendData = Object.entries(trendMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, data]) => ({
+      name: month,
+      'مقبول': data.hired,
+      'إجمالي': data.total,
+      'نسبة القبول': data.total > 0 ? Math.round((data.hired / data.total) * 100) : 0,
+    }))
+
+  // shift distribution
+  const shiftMap = mergedCandidates.reduce((acc, c) => {
+    const shift = (c as any).workShift || 'غير محدد'
+    acc[shift] = (acc[shift] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  const shiftData = Object.entries(shiftMap).map(([name, value]) => ({ name, value }))
+
+  // marital status distribution
+  const maritalMap = mergedCandidates.reduce((acc, c) => {
+    const status = (c as any).maritalStatus || 'غير محدد'
+    acc[status] = (acc[status] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  const maritalData = Object.entries(maritalMap).map(([name, value]) => ({ name, value }))
+
+  // candidates vs savedCandidates comparison
+  const comparisonData = [
+    { name: 'المرشحين', القيمة: candidates.length },
+    { name: 'المحفوظين', القيمة: savedCandidates.length },
+  ]
 
   // export handler
   const handleExport = () => {
@@ -127,7 +206,7 @@ const AnalyticsPage: React.FC = () => {
         t('database.columns.finalResult'), 
         t('candidates.columns.addDate')
       ],
-      ...candidates.map(c => [
+      ...mergedCandidates.map(c => [
         c.name, c.nationalId, c.governorate, c.qualification,
         c.securityCompany, c.position || '', c.offerResult, c.offerDate,
       ]),
@@ -136,7 +215,7 @@ const AnalyticsPage: React.FC = () => {
   }
 
   const handleExportExcel = () => {
-    const data = candidates.map(c => ({
+    const data = mergedCandidates.map(c => ({
       [t('candidates.columns.name')]:        c.name,
       [t('candidates.columns.nationalId')]:  c.nationalId,
       [t('candidates.columns.governorate')]: c.governorate,
@@ -311,6 +390,96 @@ const AnalyticsPage: React.FC = () => {
               ) : (
                 <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>لا توجد بيانات</div>
               )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Row 3: Trends + Shift + Marital + Comparison ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+
+          {/* Trends line chart */}
+          <div className="section-card">
+            <div className="section-card-header"><h3>{t('analytics.charts.trend', 'اتجاه القبول')}</h3></div>
+            <div className="section-card-body" style={{ padding: '8px 8px 16px' }}>
+              {trendData.length > 1 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={trendData} margin={{ top: 8, right: 16, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend formatter={(value) => <span style={{ fontSize: '12px', color: legendColor }}>{value}</span>} />
+                    <Line type="monotone" dataKey="مقبول" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e', r: 3 }} name="مقبول" />
+                    <Line type="monotone" dataKey="إجمالي" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 3 }} name="إجمالي" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>بيانات غير كافية للاتجاه</div>
+              )}
+            </div>
+          </div>
+
+          {/* Shift distribution */}
+          <div className="section-card">
+            <div className="section-card-header"><h3>{t('analytics.charts.shift', 'توزيع الوردية')}</h3></div>
+            <div className="section-card-body" style={{ padding: '8px 16px 20px' }}>
+              {shiftData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={shiftData} cx="50%" cy="50%" outerRadius={100} dataKey="value" labelLine={false} label={renderPieLabel}>
+                      {shiftData.map((_, i) => <Cell key={i} fill={i === 0 ? '#f59e0b' : '#3b82f6'} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend formatter={(value) => <span style={{ fontSize: '12px', color: legendColor }}>{value}</span>} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>لا توجد بيانات</div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+
+          {/* Marital status distribution */}
+          <div className="section-card">
+            <div className="section-card-header"><h3>{t('analytics.charts.marital', 'الحالة الاجتماعية')}</h3></div>
+            <div className="section-card-body" style={{ padding: '8px 16px 20px' }}>
+              {maritalData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={maritalData} cx="50%" cy="50%" outerRadius={100} dataKey="value" labelLine={false} label={renderPieLabel}>
+                      {maritalData.map((_, i) => <Cell key={i} fill={BAR_PALETTE[i % BAR_PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend formatter={(value) => <span style={{ fontSize: '12px', color: legendColor }}>{value}</span>} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>لا توجد بيانات</div>
+              )}
+            </div>
+          </div>
+
+          {/* Candidates vs SavedCandidates comparison */}
+          <div className="section-card">
+            <div className="section-card-header"><h3>{t('analytics.charts.comparison', 'مقارنة المرشحين')}</h3></div>
+            <div className="section-card-body" style={{ padding: '8px 8px 16px' }}>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={comparisonData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: tickColor }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: cursorColor }} />
+                  <Bar dataKey="القيمة" name="العدد" radius={[5, 5, 0, 0]} barSize={80}>
+                    <Cell fill="#3b82f6" />
+                    <Cell fill="#22c55e" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 

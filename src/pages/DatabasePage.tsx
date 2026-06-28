@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { supabase } from '../integrations/supabase/client'
@@ -22,6 +22,7 @@ const DatabasePage: React.FC = () => {
     getUnreadNotifications,
     markNotificationAsRead,
     saveCandidateToDatabase,
+    logAction,
     set
   } = useStore()
 
@@ -73,8 +74,10 @@ const DatabasePage: React.FC = () => {
 
   const unreadNotifications = getUnreadNotifications()
 
-  const canViewDatabase = currentUser?.userType === 'security_employee' || currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
-  const canDelete = currentUser?.userType === 'admin'
+  const perms = usePermissions()
+  const canViewDatabase = perms.canViewDatabase
+  const canDelete = perms.canDeleteFromDatabase
+  const canExclude = perms.canExcludeFromDatabase
 
   const uniqueCompanies = Array.from(new Set(savedCandidates.map(c => c.securityCompany))).filter(Boolean)
   const { allPositions } = useEditableLists()
@@ -256,6 +259,9 @@ const DatabasePage: React.FC = () => {
           )
         }))
 
+        // تسجيل النشاط
+        logAction('استقالة', 'مرشح محفوظ', candidate.name, `السبب: ${resignationReason}`)
+
         alert('تم تسجيل استقالة المرشح بنجاح')
         setShowResignationModal(false)
         setResignationReason('')
@@ -390,6 +396,7 @@ const DatabasePage: React.FC = () => {
             { label: t('status.accepted'),  value: getSavedCandidatesByResult('مقبول').length,  color: 'hsl(var(--success))' },
             { label: t('status.rejected'),  value: getSavedCandidatesByResult('مرفوض').length,  color: 'hsl(var(--danger))' },
             { label: t('status.excluded'),  value: getSavedCandidatesByResult('مستبعد').length, color: 'hsl(var(--warning))' },
+            { label: t('status.resigned', 'استقالة'), value: getSavedCandidatesByResult('استقالة').length, color: 'hsl(var(--purple))' },
             { label: i18n.language === 'en' ? 'Total' : 'الإجمالي', value: savedCandidates.length, color: 'hsl(var(--primary))' },
           ].map(s => (
             <div key={s.label} className="stats-mini-card">
@@ -512,18 +519,24 @@ const DatabasePage: React.FC = () => {
                       {candidate.exclusionReason ? `استبعاد: ${candidate.exclusionReason}` :
                        candidate.resignationReason ? `استقالة: ${candidate.resignationReason}` : '—'}
                     </td>
-                    {canDelete && (
+                    {(canDelete || canExclude) && (
                       <td>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button className="btn btn-ghost btn-sm" title="استبعاد" style={{ color: 'hsl(var(--warning))' }} onClick={() => handleExclusionClick(candidate.id)}>
-                            <UserMinus size={13} />
-                          </button>
-                          <button className="btn btn-ghost btn-sm" title="استقالة" style={{ color: 'hsl(var(--purple))' }} onClick={() => handleResignationClick(candidate.id)}>
-                            <Resign size={13} />
-                          </button>
-                          <button className="btn btn-ghost btn-sm" title="حذف" style={{ color: 'hsl(var(--danger))' }} onClick={() => handleDeleteSingle(candidate.id)}>
-                            <Trash2 size={13} />
-                          </button>
+                          {canExclude && (
+                            <button className="btn btn-ghost btn-sm" title="استبعاد" style={{ color: 'hsl(var(--warning))' }} onClick={() => handleExclusionClick(candidate.id)}>
+                              <UserMinus size={13} />
+                            </button>
+                          )}
+                          {canExclude && (
+                            <button className="btn btn-ghost btn-sm" title="استقالة" style={{ color: 'hsl(var(--purple))' }} onClick={() => handleResignationClick(candidate.id)}>
+                              <Resign size={13} />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button className="btn btn-ghost btn-sm" title="حذف" style={{ color: 'hsl(var(--danger))' }} onClick={() => handleDeleteSingle(candidate.id)}>
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}

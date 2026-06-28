@@ -3,23 +3,24 @@ import { Link, useLocation } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { useTheme } from '../context/ThemeContext'
 import { useTranslation } from 'react-i18next'
+import { usePermissions } from '../hooks/usePermissions'
 import Footer from './Footer'
 import {
   LayoutDashboard, Users, BarChart3,
   Database, Upload, UserCog, Settings, ShieldCheck,
   LogOut, ChevronLeft, PanelRightClose, PanelRightOpen,
-  Sun, Moon, Globe
+  Sun, Moon, Globe, User
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { path: '/dashboard',   labelKey: 'dashboard',     icon: LayoutDashboard, permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/candidates',  labelKey: 'candidates',    icon: Users,           permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/analytics',   labelKey: 'analytics',     icon: BarChart3,       permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/database',    labelKey: 'database',      icon: Database,        permissions: ['security_employee', 'interview_manager', 'admin'] },
-  { path: '/bulk-upload', labelKey: 'bulkUpload',    icon: Upload,          permissions: ['security_employee', 'admin'] },
-  { path: '/users',       labelKey: 'users',         icon: UserCog,         permissions: ['admin'] },
-  { path: '/settings',    labelKey: 'settings',      icon: Settings,        permissions: ['admin'] },
-  { path: '/security',    labelKey: 'security',      icon: ShieldCheck,     permissions: ['admin'] },
+  { path: '/dashboard',   labelKey: 'dashboard',     icon: LayoutDashboard, permissionKey: null },
+  { path: '/candidates',  labelKey: 'candidates',    icon: Users,           permissionKey: 'canViewCandidates' },
+  { path: '/analytics',   labelKey: 'analytics',     icon: BarChart3,       permissionKey: 'canViewAnalytics' },
+  { path: '/database',    labelKey: 'database',      icon: Database,        permissionKey: 'canViewDatabase' },
+  { path: '/bulk-upload', labelKey: 'bulkUpload',    icon: Upload,          permissionKey: 'canBulkUpload' },
+  { path: '/users',       labelKey: 'users',         icon: UserCog,         permissionKey: 'canManageUsers' },
+  { path: '/settings',    labelKey: 'settings',      icon: Settings,        permissionKey: 'canAccessSettings' },
+  { path: '/security',    labelKey: 'security',      icon: ShieldCheck,     permissionKey: 'canViewSecurity' },
 ]
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -28,15 +29,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { theme, toggleTheme } = useTheme()
   const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
+  const permissions = usePermissions()
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'ar' : 'en'
     i18n.changeLanguage(newLang)
   }
 
-  const filtered = NAV_ITEMS.filter(item =>
-    currentUser && item.permissions.includes(currentUser.userType)
-  )
+  const filtered = NAV_ITEMS.filter(item => {
+    if (!currentUser) return false
+    if (!item.permissionKey) return true
+    return permissions[item.permissionKey as keyof typeof permissions] === true
+  })
 
   const handleLogout = () => {
     if (window.confirm(t('layout.logoutConfirm', 'هل أنت متأكد من تسجيل الخروج؟'))) logout()
@@ -132,30 +136,37 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
           {/* User chip - only when expanded */}
           {!collapsed && currentUser && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              background: 'rgba(255,255,255,0.06)',
-              borderRadius: '8px', padding: '7px 10px',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}>
+            <Link to="/profile" style={{ textDecoration: 'none' }}>
               <div style={{
-                width: '26px', height: '26px', flexShrink: 0,
-                background: 'linear-gradient(135deg, hsl(217 91% 55%), hsl(262 83% 65%))',
-                borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '11px', fontWeight: 700, color: 'white',
-              }}>
-                {userName.charAt(0)}
-              </div>
-              <div style={{ overflow: 'hidden', flex: 1 }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {userName}
+                display: 'flex', alignItems: 'center', gap: '8px',
+                background: 'rgba(255,255,255,0.06)',
+                borderRadius: '8px', padding: '7px 10px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                transition: 'background 0.15s',
+                cursor: 'pointer',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+              >
+                <div style={{
+                  width: '26px', height: '26px', flexShrink: 0,
+                  background: 'linear-gradient(135deg, hsl(217 91% 55%), hsl(262 83% 65%))',
+                  borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '11px', fontWeight: 700, color: 'white',
+                }}>
+                  {userName.charAt(0)}
                 </div>
-                <div style={{ fontSize: '11px', color: 'hsl(215 25% 55%)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {currentUser.department}
+                <div style={{ overflow: 'hidden', flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {userName}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'hsl(215 25% 55%)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentUser.department}
+                  </div>
                 </div>
               </div>
-            </div>
+            </Link>
           )}
         </div>
 
@@ -201,8 +212,24 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           })}
         </nav>
 
-        {/* Theme + Logout */}
+        {/* Theme + Profile + Logout */}
         <div style={{ padding: '8px 8px 16px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          {!collapsed && (
+            <Link to="/profile"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                width: '100%', padding: '10px 12px', borderRadius: '8px',
+                color: 'hsl(215 25% 65%)', background: 'transparent',
+                textDecoration: 'none', fontSize: '13.5px', fontWeight: 500,
+                marginBottom: '6px', transition: 'background 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLElement).style.color = 'white' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'hsl(215 25% 65%)' }}
+            >
+              <User size={16} />
+              <span style={{ flex: 1 }}>{t('nav.profile', 'الملف الشخصي')}</span>
+            </Link>
+          )}
           <button
             onClick={toggleTheme}
             title={theme === 'dark' ? t('layout.themeLight') : t('layout.themeDark')}

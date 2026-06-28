@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { useStore, UserType } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { DEFAULT_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_LABELS, UserPermissions } from '../types/permissions'
-import { Plus, Edit, Trash2, Ban, CheckCircle, Shield, ChevronDown, ChevronUp, Save, X } from 'lucide-react'
+import { Plus, Edit, Trash2, Ban, CheckCircle, Shield, ChevronDown, ChevronUp, Save, X, Search, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import * as XLSX from 'xlsx'
 
 const inputStyle = { width: '100%', padding: '9px 12px', border: '1.5px solid hsl(var(--border))', borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', outline: 'none' } as const
 const btnStyle = (bg: string, text = 'white') => ({ backgroundColor: bg, color: text, padding: '8px 16px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' } as const)
@@ -20,14 +21,18 @@ const ROLE_COLORS: Record<string, string> = {
 }
 
 export default function Users() {
-  const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase, deleteUserFromSupabase, toggleUserStatus, updateUserPermissions } = useStore()
+  const { users, currentUser, addUserToSupabase, updateUserRoleInSupabase, updateUserInSupabase, deleteUserFromSupabase, toggleUserStatus, updateUserPermissions } = useStore()
   const { t, i18n } = useTranslation()
   const dir = i18n.language === 'en' ? 'ltr' : 'rtl'
 
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDepartment, setEditDepartment] = useState('')
+  const [editRole, setEditRole] = useState<UserType>('security_employee')
   const [permissionsId, setPermissionsId] = useState<string | null>(null)
   const [draftPermissions, setDraftPermissions] = useState<UserPermissions | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<string[]>(PERMISSION_GROUPS.map(g => g.label))
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -37,15 +42,34 @@ export default function Users() {
 
   const canManage = currentUser?.userType === 'admin'
 
+  const filteredUsers = searchQuery
+    ? users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    : users
+
+  const handleExportExcel = () => {
+    const data = users.map(u => ({
+      'الاسم': u.name,
+      'البريد الإلكتروني': u.email,
+      'القسم': u.department,
+      'الدور': ROLE_LABELS[u.userType],
+      'الحالة': u.isActive === false ? 'معطل' : 'نشط',
+      'تاريخ الإنشاء': new Date(u.createdAt).toLocaleDateString('en-GB'),
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Users')
+    XLSX.writeFile(wb, `Users_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
   // ── Add user ─────────────────────────────────────────────
   const handleAdd = async () => {
     if (!newUser.name || !newUser.email || !newUser.department) { setError('يرجى ملء جميع الحقول'); return }
     setLoading(true); setError('')
     try {
       await addUserToSupabase(newUser)
-      setNewUser({ name: '', email: '', department: '', userType: 'security_employee' })
+      setNewUser({ name: '', email: '', department: '', userType: 'security_employee', password: '' })
       setIsAdding(false)
-      alert(`✅ تم إضافة المستخدم "${newUser.name}" بنجاح!\n\n⚠️ مهم: يجب إضافته في Supabase Auth > Users بنفس البريد الإلكتروني وتحديد كلمة مرور.`)
+      alert(`✅ تم إضافة المستخدم "${newUser.name}" بنجاح!`)
     } catch (e: any) { setError(e?.message || 'فشل في إضافة المستخدم') }
     finally { setLoading(false) }
   }
@@ -55,6 +79,25 @@ export default function Users() {
     setLoading(true)
     try { await updateUserRoleInSupabase(userId, role); setEditingId(null) }
     catch { setError('فشل في تحديث الدور') }
+    finally { setLoading(false) }
+  }
+
+  // ── Start editing user details ──
+  const startEditing = (user: any) => {
+    setEditingId(user.id)
+    setEditName(user.name)
+    setEditDepartment(user.department)
+    setEditRole(user.userType)
+  }
+
+  // ── Save user details ──
+  const handleSaveUser = async (userId: string) => {
+    setLoading(true)
+    try {
+      await updateUserInSupabase(userId, { name: editName, department: editDepartment, userType: editRole })
+      setEditingId(null)
+      alert('تم تحديث بيانات المستخدم بنجاح')
+    } catch { setError('فشل في تحديث بيانات المستخدم') }
     finally { setLoading(false) }
   }
 
@@ -108,16 +151,25 @@ export default function Users() {
       <div className="page-wrapper" style={{ direction: dir }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h1 className="page-title">إدارة المستخدمين</h1>
             <p className="page-subtitle">{users.length} مستخدم في النظام</p>
           </div>
-          {canManage && (
-            <button onClick={() => setIsAdding(true)} style={btnStyle('#3b82f6')}>
-              <Plus size={15} /> إضافة مستخدم
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="search-box">
+              <Search size={14} />
+              <input className="form-input" style={{ width: '220px' }} type="text" placeholder="بحث بالاسم أو البريد..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+            <button onClick={handleExportExcel} style={btnStyle('#22c55e')}>
+              <Download size={14} /> تصدير Excel
             </button>
-          )}
+            {canManage && (
+              <button onClick={() => setIsAdding(true)} style={btnStyle('#3b82f6')}>
+                <Plus size={15} /> إضافة مستخدم
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -131,6 +183,14 @@ export default function Users() {
             </div>
           ))}
         </div>
+
+        {/* Search info */}
+        {searchQuery && (
+          <div className="selection-bar" style={{ marginBottom: '16px' }}>
+            <Search size={14} /> نتائج البحث عن "{searchQuery}" — {filteredUsers.length} مستخدم
+            <button onClick={() => setSearchQuery('')} style={{ marginRight: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', fontFamily: 'inherit' }}>إلغاء البحث</button>
+          </div>
+        )}
 
         {/* Add form */}
         {isAdding && (
@@ -164,7 +224,7 @@ export default function Users() {
         <div className="section-card">
           <div className="section-card-header"><h3>أعضاء الفريق</h3></div>
           <div style={{ padding: '8px 0' }}>
-            {users.map(user => (
+            {filteredUsers.map(user => (
               <div key={user.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '14px 24px', borderBottom: '1px solid hsl(var(--border))',
@@ -184,16 +244,25 @@ export default function Users() {
                     {user.name.charAt(0)}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 600, color: 'hsl(var(--foreground))', fontSize: '14px' }}>
-                      {user.name}
-                      {user.isActive === false && (
-                        <span style={{ marginRight: '8px', fontSize: '11px', background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: '99px', fontWeight: 600 }}>معطل</span>
-                      )}
-                      {user.permissions && (
-                        <span style={{ marginRight: '6px', fontSize: '11px', background: '#ede9fe', color: '#7c3aed', padding: '2px 8px', borderRadius: '99px', fontWeight: 600 }}>صلاحيات مخصصة</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{user.email} · {user.department}</div>
+                    {editingId === user.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <input style={inputStyle} value={editName} onChange={e => setEditName(e.target.value)} placeholder="الاسم" />
+                        <input style={inputStyle} value={editDepartment} onChange={e => setEditDepartment(e.target.value)} placeholder="القسم" />
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: 600, color: 'hsl(var(--foreground))', fontSize: '14px' }}>
+                          {user.name}
+                          {user.isActive === false && (
+                            <span style={{ marginRight: '8px', fontSize: '11px', background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: '99px', fontWeight: 600 }}>معطل</span>
+                          )}
+                          {user.permissions && (
+                            <span style={{ marginRight: '6px', fontSize: '11px', background: '#ede9fe', color: '#7c3aed', padding: '2px 8px', borderRadius: '99px', fontWeight: 600 }}>صلاحيات مخصصة</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{user.email} · {user.department}</div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -203,10 +272,11 @@ export default function Users() {
                   {editingId === user.id ? (
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                       <select style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}
-                        value={user.userType}
-                        onChange={e => handleUpdateRole(user.id, e.target.value as UserType)}>
+                        value={editRole}
+                        onChange={e => setEditRole(e.target.value as UserType)}>
                         {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
+                      <button onClick={() => handleSaveUser(user.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#22c55e' }}><Save size={16} /></button>
                       <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}><X size={16} /></button>
                     </div>
                   ) : (
@@ -217,8 +287,8 @@ export default function Users() {
 
                   {canManage && (
                     <>
-                      {/* Edit role */}
-                      <button onClick={() => setEditingId(user.id)} title="تعديل الدور"
+                      {/* Edit user */}
+                      <button onClick={() => startEditing(user)} title="تعديل البيانات"
                         style={{ background: 'none', border: '1px solid hsl(var(--border))', borderRadius: '7px', padding: '5px 8px', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>
                         <Edit size={14} />
                       </button>
