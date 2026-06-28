@@ -1,227 +1,302 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
-import { Users, UserCheck, CalendarClock, CalendarCheck2, TrendingUp, Database, UserX, Plus, Upload } from 'lucide-react'
-
+import { Monitor, Smartphone, Globe, Clock, Shield, AlertTriangle, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-const DashboardPage: React.FC = () => {
-  const { currentUser, candidates, savedCandidates, interviews, auditLogs, loadAuditLogs, getUnreadNotifications } = useStore()
+const SecurityPage: React.FC = () => {
   const { t } = useTranslation()
+  const { currentUser, loginLogs, loadLoginLogs, getActiveSessions, auditLogs, loadAuditLogs } = useStore()
+  const [activeTab, setActiveTab] = useState<'logins' | 'activities'>('logins')
+  const [selectedLog, setSelectedLog] = useState<string | null>(null)
+  const [filterEmail, setFilterEmail] = useState('')
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
+  const [auditFilter, setAuditFilter] = useState('')
 
-  React.useEffect(() => {
-    if (auditLogs.length === 0) {
+  useEffect(() => {
+    if (currentUser?.userType === 'admin') {
+      loadLoginLogs()
       loadAuditLogs()
     }
-  }, [loadAuditLogs, auditLogs.length])
+  }, [currentUser, loadLoginLogs, loadAuditLogs])
 
-  const mergedCandidates = React.useMemo(() => {
-    const map = new Map<string, any>()
-    savedCandidates.forEach(sc => map.set(sc.nationalId, { ...sc, offerResult: sc.finalResult }))
-    candidates.forEach(c => map.set(c.nationalId, c))
-    return Array.from(map.values())
-  }, [candidates, savedCandidates])
+  const activeSessions = getActiveSessions()
+  const filteredLogs = loginLogs.filter(log => {
+    if (filterEmail && !log.userEmail.toLowerCase().includes(filterEmail.toLowerCase())) return false
+    if (filterActive === 'active' && !log.isActive) return false
+    if (filterActive === 'inactive' && log.isActive) return false
+    return true
+  })
 
-  const getWelcomeMessage = () => {
-    const welcome = t('dashboard.welcome')
-    if (!currentUser) return welcome
-    return `${welcome} ${currentUser.name.split(' - ')[0]}`
+  const filteredAuditLogs = auditLogs.filter(log => {
+    if (auditFilter) {
+      const q = auditFilter.toLowerCase()
+      return log.userName.toLowerCase().includes(q) || 
+             log.actionType.toLowerCase().includes(q) || 
+             log.targetName.toLowerCase().includes(q)
+    }
+    return true
+  })
+
+  const getDeviceIcon = (deviceType?: string) => {
+    if (deviceType?.includes('موبايل')) return <Smartphone size={14} />
+    return <Monitor size={14} />
   }
 
-  const getUserRole = () => {
-    if (!currentUser) return ''
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('ar-EG', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const getDuration = (loginTime: string, logoutTime?: string) => {
+    const login = new Date(loginTime)
+    const logout = logoutTime ? new Date(logoutTime) : new Date()
+    const diff = Math.floor((logout.getTime() - login.getTime()) / 1000 / 60)
     
-    switch (currentUser.userType) {
-      case 'security_employee':
-        return t('dashboard.roles.security_employee')
-      case 'interview_manager':
-        return t('dashboard.roles.interview_manager')
-      case 'admin':
-        return t('dashboard.roles.admin')
-      default:
-        return ''
-    }
-  }
-
-  const getNewCandidates = () => {
-    return candidates.filter(c => c.status === 'جديد').length
-  }
-
-  const getPendingInterviews = () => {
-    return interviews.filter(i => i.status === 'مجدولة').length
-  }
-
-  const getCompletedInterviews = () => {
-    return interviews.filter(i => i.status === 'مكتملة').length
-  }
-
-  const getHiredCandidates = () => {
-    return mergedCandidates.filter(c => c.offerResult === 'مقبول').length
-  }
-
-  const getResignedCandidates = () => {
-    return savedCandidates.filter(c => c.finalResult === 'استقالة').length
-  }
-
-  const unreadNotifications = getUnreadNotifications()
-
-  const stats = [
-    { label: t('dashboard.stats.totalCandidates'),     value: mergedCandidates.length,     icon: Users,           color: 'blue' },
-    { label: t('dashboard.stats.newCandidates'),       value: getNewCandidates(),          icon: UserCheck,       color: 'green' },
-    { label: t('dashboard.stats.pendingInterviews'),   value: getPendingInterviews(),      icon: CalendarClock,   color: 'orange' },
-    { label: t('dashboard.stats.completedInterviews'), value: getCompletedInterviews(),    icon: CalendarCheck2,  color: 'purple' },
-    { label: t('dashboard.stats.hiredCandidates'),     value: getHiredCandidates(),        icon: TrendingUp,      color: 'green' },
-    { label: t('dashboard.stats.savedCandidates', 'في قاعدة البيانات'), value: savedCandidates.length, icon: Database, color: 'cyan' },
-  ]
-
-  const getStatusBadge = (result: string) => {
-    const map: Record<string, string> = {
-      'مقبول':     'badge badge-success',
-      'مرفوض':     'badge badge-danger',
-      'مستبعد':    'badge badge-warning',
-      'في انتظار': 'badge badge-info',
-    }
-    return map[result] || 'badge badge-muted'
-  }
-
-  const getStatusTranslation = (result: string) => {
-    const map: Record<string, string> = {
-      'مقبول':     t('status.accepted'),
-      'مرفوض':     t('status.rejected'),
-      'مستبعد':    t('status.excluded'),
-      'في انتظار': t('status.pending'),
-      'جديد':      t('status.new')
-    }
-    return map[result] || result
+    if (diff < 60) return t('security.minute', '{{count}} دقيقة', { count: diff })
+    const hours = Math.floor(diff / 60)
+    const minutes = diff % 60
+    return t('security.hourMinute', '{{hours}} ساعة {{minutes}} دقيقة', { hours, minutes })
   }
 
   return (
-    <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
-      <div className="page-wrapper" style={{ direction: 'inherit' }}>
+    <ProtectedLayout requiredPermissions={['admin']}>
+      <div className="page-wrapper" style={{ direction: 'rtl' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: '28px' }}>
-          <h1 className="page-title">{getWelcomeMessage()}</h1>
-          <p className="page-subtitle">
-            {getUserRole()}
-            {currentUser?.department ? ` · ${currentUser.department}` : ''}
-            {unreadNotifications.length > 0 && (
-              <span style={{ color: 'hsl(4 86% 55%)', fontWeight: 600, marginInlineStart: '8px' }}>
-                · {unreadNotifications.length} {t('dashboard.newNotification')}
-              </span>
-            )}
-          </p>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Shield size={22} /> {t('security.title', 'مراقبة الأمان والأنشطة')}
+            </h1>
+            <p className="page-subtitle">{t('security.subtitle', 'تتبع تسجيلات الدخول وأنشطة المستخدمين')}</p>
+          </div>
         </div>
 
-        {/* Stat cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          marginBottom: '28px'
-        }}>
-          {stats.map((s) => {
-            const Icon = s.icon
-            return (
-              <div key={s.label} className={`stat-card ${s.color}`}>
-                <div className="stat-icon">
-                  <Icon size={20} />
-                </div>
-                <div className="stat-value">{s.value}</div>
-                <div className="stat-label">{s.label}</div>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          <button
+            className={`btn ${activeTab === 'logins' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('logins')}
+          >
+            سجلات الدخول
+          </button>
+          <button
+            className={`btn ${activeTab === 'activities' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('activities')}
+          >
+            سجلات الأنشطة
+          </button>
+        </div>
+
+        {activeTab === 'logins' ? (
+          <>
+            {/* Stats */}
+            <div className="stats-mini" style={{ marginBottom: '20px' }}>
+              <div className="stats-mini-card">
+                <div className="value" style={{ color: '#2980b9' }}>{loginLogs.length}</div>
+                <div className="label">{t('security.totalLogins', 'إجمالي تسجيلات الدخول')}</div>
               </div>
-            )
-          })}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="section-card" style={{ marginBottom: '16px' }}>
-          <div className="section-card-header">
-            <h3>{t('dashboard.quickActions', 'إجراءات سريعة')}</h3>
-          </div>
-          <div className="section-card-body" style={{ padding: '12px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              onClick={() => window.location.href = '/candidates'}>
-              <Plus size={14} /> {t('dashboard.addCandidate', 'إضافة مرشح')}
-            </button>
-            <button className="btn btn-success btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              onClick={() => window.location.href = '/bulk-upload'}>
-              <Upload size={14} /> {t('dashboard.uploadExcel', 'رفع ملف Excel')}
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-
-          {/* Recent activity */}
-          <div className="section-card">
-            <div className="section-card-header">
-              <h3>{t('dashboard.recentActivity.title')}</h3>
-              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{t('dashboard.recentActivity.subtitle')}</span>
+              <div className="stats-mini-card">
+                <div className="value" style={{ color: '#27ae60' }}>{activeSessions.length}</div>
+                <div className="label">{t('security.activeSessions', 'جلسات نشطة')}</div>
+              </div>
+              <div className="stats-mini-card">
+                <div className="value" style={{ color: '#f39c12' }}>{new Set(loginLogs.map(log => log.userEmail)).size}</div>
+                <div className="label">{t('security.activeUsers', 'مستخدمين نشطين')}</div>
+              </div>
+              <div className="stats-mini-card">
+                <div className="value" style={{ color: '#e74c3c' }}>{new Set(loginLogs.filter(log => log.country && log.country !== 'غير معروف').map(log => log.country)).size}</div>
+                <div className="label">{t('security.differentCountries', 'دول مختلفة')}</div>
+              </div>
             </div>
-            <div className="section-card-body" style={{ padding: '8px 0' }}>
-              {auditLogs.slice(0, 5).map(log => (
-                <div key={log.id} className="activity-item">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '34px', height: '34px',
-                      background: 'hsl(var(--muted))',
-                      borderRadius: '50%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '13px', fontWeight: 700, color: 'hsl(var(--primary))',
-                      flexShrink: 0
-                    }}>
-                      {log.actionType.charAt(0)}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-                        {log.userName} - {log.actionType}
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
-                        {log.targetName} ({log.targetType})
-                      </div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
-                    {new Date(log.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-              {auditLogs.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '24px', color: 'hsl(215 16% 52%)', fontSize: '13px' }}>
-                  {t('dashboard.recentActivity.noActivity')}
+
+            {/* Filters */}
+            <div className="filter-bar" style={{ marginBottom: '16px' }}>
+              <div className="search-box">
+                <Search size={14} />
+                <input className="form-input" style={{ width: '220px' }} type="text" placeholder={t('security.searchByEmail', 'البحث بالبريد الإلكتروني...')} value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} />
+              </div>
+              <select className="form-input" style={{ width: '180px' }} value={filterActive} onChange={(e) => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}>
+                <option value="all">{t('security.allSessions', 'جميع الجلسات')}</option>
+                <option value="active">{t('security.activeOnly', 'نشطة فقط')}</option>
+                <option value="inactive">{t('security.inactiveOnly', 'منتهية فقط')}</option>
+              </select>
+            </div>
+
+            {/* Login logs table */}
+            <div className="section-card">
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('security.user', 'المستخدم')}</th>
+                      <th>{t('security.device', 'الجهاز')}</th>
+                      <th>{t('security.location', 'الموقع')}</th>
+                      <th>{t('security.loginTime', 'وقت الدخول')}</th>
+                      <th>{t('security.duration', 'المدة')}</th>
+                      <th>{t('security.status', 'الحالة')}</th>
+                      <th>{t('security.details', 'تفاصيل')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLogs.map((log) => (
+                      <tr key={log.id}
+                        style={{ backgroundColor: log.isActive ? 'hsl(120 40% 95%)' : 'transparent', cursor: 'pointer' }}
+                        onClick={() => setSelectedLog(selectedLog === log.id ? null : log.id)}
+                      >
+                        <td>
+                          <div style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>{log.userName}</div>
+                          <div className="muted" style={{ fontSize: '12px' }}>{log.userEmail}</div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            {getDeviceIcon(log.deviceType)}
+                            <span>{log.deviceType || t('security.unknown', 'غير معروف')}</span>
+                          </div>
+                          <div className="muted" style={{ fontSize: '12px' }}>{log.browser} - {log.os}</div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Globe size={14} />
+                            <span>{log.city || t('security.unknown', 'غير معروف')}, {log.country || t('security.unknown', 'غير معروف')}</span>
+                          </div>
+                          {log.latitude && log.longitude && (
+                            <div className="muted" style={{ fontSize: '12px' }}>{log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}</div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Clock size={14} />
+                            <span>{formatDate(log.loginTime)}</span>
+                          </div>
+                        </td>
+                        <td>{getDuration(log.loginTime, log.logoutTime)}</td>
+                        <td>
+                          <span className={log.isActive ? 'badge badge-success' : 'badge badge-muted'}>
+                            {log.isActive ? t('security.active', 'نشط') : t('security.ended', 'منتهي')}
+                          </span>
+                        </td>
+                        <td>
+                          <button className="btn btn-primary btn-sm">
+                            {t('security.viewDetails', 'عرض التفاصيل')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {filteredLogs.length === 0 && (
+                <div className="empty-state">
+                  <AlertTriangle size={32} style={{ opacity: 0.5 }} />
+                  <p>{t('security.noLogs', 'لا توجد سجلات دخول')}</p>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* User info */}
-          <div className="section-card">
-            <div className="section-card-header">
-              <h3>{t('dashboard.accountInfo.title')}</h3>
-            </div>
-            <div className="section-card-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {[
-                  { label: t('dashboard.accountInfo.name'),             value: currentUser?.name },
-                  { label: t('dashboard.accountInfo.email'), value: currentUser?.email },
-                  { label: t('dashboard.accountInfo.department'),             value: currentUser?.department },
-                  { label: t('dashboard.accountInfo.role'),          value: getUserRole() },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', color: 'hsl(var(--muted-foreground))', fontWeight: 500 }}>{row.label}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>{row.value}</span>
-                  </div>
-                ))}
+            {/* Session details */}
+            {selectedLog && (
+              <div className="section-card" style={{ marginTop: '16px', border: '2px solid hsl(210 90% 55%)' }}>
+                <div className="section-card-header">
+                  <h3>{t('security.sessionDetails', 'تفاصيل الجلسة')}</h3>
+                </div>
+                <div className="section-card-body">
+                  {(() => {
+                    const log = loginLogs.find(l => l.id === selectedLog)
+                    if (!log) return null
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '14px' }}>
+                        <div><strong>{t('security.user')}:</strong> {log.userName} ({log.userEmail})</div>
+                        <div><strong>{t('security.ipAddress')}:</strong> {log.ipAddress || t('security.unknown')}</div>
+                        <div><strong>{t('security.device')}:</strong> {log.deviceType || t('security.unknown')}</div>
+                        <div><strong>{t('security.browser')}:</strong> {log.browser || t('security.unknown')}</div>
+                        <div><strong>{t('security.os')}:</strong> {log.os || t('security.unknown')}</div>
+                        <div><strong>{t('security.country')}:</strong> {log.country || t('security.unknown')}</div>
+                        <div><strong>{t('security.city')}:</strong> {log.city || t('security.unknown')}</div>
+                        <div><strong>{t('security.loginTime')}:</strong> {formatDate(log.loginTime)}</div>
+                        {log.logoutTime && <div><strong>{t('security.logoutTime')}:</strong> {formatDate(log.logoutTime)}</div>}
+                        <div><strong>{t('security.duration')}:</strong> {getDuration(log.loginTime, log.logoutTime)}</div>
+                        <div><strong>{t('security.sessionId')}:</strong> <code style={{ fontSize: '12px' }}>{log.sessionId}</code></div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <strong>{t('security.userAgent')}:</strong>
+                          <div style={{ padding: '10px', background: 'hsl(var(--muted))', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all', marginTop: '5px' }}>
+                            {log.userAgent || t('security.unknown')}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Audit log filter */}
+            <div className="filter-bar" style={{ marginBottom: '16px' }}>
+              <div className="search-box">
+                <Search size={14} />
+                <input className="form-input" style={{ width: '300px' }} type="text" placeholder="البحث باسم المستخدم أو الإجراء..." value={auditFilter} onChange={(e) => setAuditFilter(e.target.value)} />
               </div>
             </div>
-          </div>
 
-        </div>
+            {/* Audit log table */}
+            <div className="section-card">
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>المستخدم</th>
+                      <th>الإجراء</th>
+                      <th>الهدف</th>
+                      <th>الاسم / التفاصيل</th>
+                      <th>الوقت</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAuditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td style={{ fontWeight: 600 }}>{log.userName}</td>
+                        <td>
+                          <span className={
+                            log.actionType === 'إضافة' ? 'badge badge-success' :
+                            log.actionType === 'تعديل' ? 'badge badge-warning' :
+                            log.actionType === 'قبول' ? 'badge badge-info' :
+                            log.actionType === 'رفض' || log.actionType === 'حذف' || log.actionType === 'استبعاد' ? 'badge badge-danger' : 'badge badge-muted'
+                          }>
+                            {log.actionType}
+                          </span>
+                        </td>
+                        <td className="muted">{log.targetType}</td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{log.targetName}</div>
+                          <div className="muted" style={{ fontSize: '12px', marginTop: '2px' }}>{log.details}</div>
+                        </td>
+                        <td className="muted" style={{ fontSize: '13px' }}>{formatDate(log.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {filteredAuditLogs.length === 0 && (
+                <div className="empty-state">
+                  <AlertTriangle size={32} style={{ opacity: 0.5 }} />
+                  <p>لا توجد سجلات أنشطة حالياً</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
       </div>
     </ProtectedLayout>
   )
 }
 
-export default DashboardPage
+export default SecurityPage
