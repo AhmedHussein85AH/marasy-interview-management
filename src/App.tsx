@@ -12,6 +12,7 @@ import SettingsPage from './pages/SettingsPage'
 import Users from './pages/Users'
 import BulkUploadPage from './pages/BulkUploadPage'
 import SecurityPage from './pages/SecurityPage'
+import ProfilePage from './pages/ProfilePage'
 
 const App: React.FC = () => {
   const { currentUser, initializeDemoData, cleanupRealtimeSubscriptions } = useStore()
@@ -65,23 +66,28 @@ const App: React.FC = () => {
             </ProtectedLayout>
           } />
           <Route path="/users" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissionKey="canManageUsers">
               <Users />
             </ProtectedLayout>
           } />
           <Route path="/bulk-upload" element={
-            <ProtectedLayout requiredPermissions={['security_employee', 'admin']}>
+            <ProtectedLayout requiredPermissionKey="canBulkUpload">
               <BulkUploadPage />
             </ProtectedLayout>
           } />
           <Route path="/settings" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissionKey="canAccessSettings">
               <SettingsPage />
             </ProtectedLayout>
           } />
           <Route path="/security" element={
-            <ProtectedLayout requiredPermissions={['admin']}>
+            <ProtectedLayout requiredPermissionKey="canViewSecurity">
               <SecurityPage />
+            </ProtectedLayout>
+          } />
+          <Route path="/profile" element={
+            <ProtectedLayout requiredPermissions={['security_employee', 'interview_manager', 'admin']}>
+              <ProfilePage />
             </ProtectedLayout>
           } />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />

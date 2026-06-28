@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
+import { usePermissions } from '../hooks/usePermissions'
 import * as XLSX from 'xlsx'
 import { GOVERNORATES, SECURITY_COMPANIES, POSITIONS } from '../constants/lists'
 import { Download, FileJson, FileSpreadsheet, AlertTriangle } from 'lucide-react'
@@ -24,6 +25,8 @@ interface ExcelCandidate {
 
 const BulkUploadPage: React.FC = () => {
   const { currentUser, bulkAddCandidates, bulkAddSavedCandidates, candidates, savedCandidates } = useStore()
+  const perms = usePermissions()
+  const canUpload = perms.canBulkUpload
   const [activeTab, setActiveTab] = useState<'import' | 'export'>('import')
   const [uploadType, setUploadType] = useState<'candidates' | 'saved'>('candidates')
   const [file, setFile] = useState<File | null>(null)
@@ -37,7 +40,6 @@ const BulkUploadPage: React.FC = () => {
   const jsonRef = useRef<HTMLInputElement>(null)
   const { t } = useTranslation()
 
-  const canUpload = currentUser?.userType === 'security_employee' || currentUser?.userType === 'admin'
   const today = new Date().toISOString().split('T')[0]
 
   // ── Export helpers ───────────────────────────────────────

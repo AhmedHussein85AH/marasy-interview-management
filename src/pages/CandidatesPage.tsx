@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { GOVERNORATES } from '../constants/lists'
@@ -6,8 +6,9 @@ import { useEditableLists } from '../hooks/useEditableLists'
 import { usePermissions } from '../hooks/usePermissions'
 import SelectOrAdd from '../components/SelectOrAdd'
 import MultiSelect from '../components/MultiSelect'
-import { CheckCircle, Pencil, ListChecks, Printer } from 'lucide-react'
+import { CheckCircle, Pencil, ListChecks, Printer, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import * as XLSX from 'xlsx'
 
 const EMPTY_CANDIDATE = {
   name: '', nationalId: '', birthDate: '', governorate: '',
@@ -33,15 +34,18 @@ const CandidatesPage: React.FC = () => {
   const [filterPosition, setFilterPosition] = useState<string[]>([])
   const [filterGovernorate, setFilterGovernorate] = useState<string[]>([])
   const [filterResult, setFilterResult] = useState<string[]>([])
+  const [filterMaritalStatus, setFilterMaritalStatus] = useState<string[]>([])
+  const [filterShift, setFilterShift] = useState<string[]>([])
   const [filteredCandidates, setFilteredCandidates] = useState(candidates)
   const [showDecisionModal, setShowDecisionModal] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null)
-  const [decisionResult, setDecisionResult] = useState<'مقبول' | 'مرفوض' | ''>('')
+  const [decisionResult, setDecisionResult] = useState<'مقبول' | 'مرفوض' | 'مستبعد' | ''>('')
   const [decisionNotes, setDecisionNotes] = useState('')
   const [workShift, setWorkShift] = useState<'نهار' | 'ليل' | ''>('')
   const [workLocation, setWorkLocation] = useState('')
   const [startDate, setStartDate] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
+  const [exclusionReason, setExclusionReason] = useState('')
   const [newCandidate, setNewCandidate] = useState(EMPTY_CANDIDATE)
   const [editCandidate, setEditCandidate] = useState<any>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -55,8 +59,10 @@ const CandidatesPage: React.FC = () => {
     if (filterPosition.length > 0) filtered = filtered.filter(c => filterPosition.includes(c.position || ''))
     if (filterGovernorate.length > 0) filtered = filtered.filter(c => filterGovernorate.includes(c.governorate))
     if (filterResult.length > 0) filtered = filtered.filter(c => filterResult.includes(c.offerResult))
+    if (filterMaritalStatus.length > 0) filtered = filtered.filter(c => filterMaritalStatus.includes(c.maritalStatus))
+    if (filterShift.length > 0) filtered = filtered.filter(c => filterShift.includes((c as any).workShift || ''))
     setFilteredCandidates(filtered)
-  }, [searchQuery, filterCompany, filterPosition, filterGovernorate, filterResult, candidates])
+  }, [searchQuery, filterCompany, filterPosition, filterGovernorate, filterResult, filterMaritalStatus, filterShift, candidates])
 
   const handleAddCandidate = () => {
     if (!newCandidate.name || !newCandidate.nationalId || !newCandidate.birthDate || !newCandidate.governorate || !newCandidate.qualification) {
@@ -73,12 +79,13 @@ const CandidatesPage: React.FC = () => {
     const candidate = candidates.find(c => c.id === id)
     if (candidate) {
       setSelectedCandidate(candidate)
-      setDecisionResult(result as 'مقبول' | 'مرفوض')
+      setDecisionResult(result as 'مقبول' | 'مرفوض' | 'مستبعد')
       setDecisionNotes('')
       setWorkShift('')
       setWorkLocation('')
       setStartDate('')
       setRejectionReason('')
+      setExclusionReason('')
       setShowDecisionModal(true)
     }
   }
@@ -92,18 +99,19 @@ const CandidatesPage: React.FC = () => {
         decisionResult === 'مقبول' && workLocation ? `الموقع: ${workLocation}` : '',
         decisionResult === 'مقبول' && startDate ? `تاريخ البداية: ${startDate}` : '',
         decisionResult === 'مرفوض' && rejectionReason ? `سبب الرفض: ${rejectionReason}` : '',
+        decisionResult === 'مستبعد' && exclusionReason ? `سبب الاستبعاد: ${exclusionReason}` : '',
       ].filter(Boolean).join(' | ') || undefined
 
       await updateCandidateStatus(
         selectedCandidate.id,
-        decisionResult === 'مقبول' ? 'تم التوظيف' : 'مرفوض',
+        decisionResult === 'مقبول' ? 'تم التوظيف' : decisionResult === 'مرفوض' ? 'مرفوض' : 'مستبعد',
         decisionResult as any,
         fullNotes,
         workShift as 'نهار' | 'ليل' || undefined
       )
-      if (decisionResult === 'مقبول' || decisionResult === 'مرفوض') {
+      if (['مقبول', 'مرفوض', 'مستبعد'].includes(decisionResult)) {
         const updated = candidates.find(c => c.id === selectedCandidate.id)
-        if (updated) await saveCandidateToDatabase(updated, decisionResult as any, fullNotes, workShift as 'نهار' | 'ليل' || undefined)
+        if (updated) await saveCandidateToDatabase(updated, decisionResult as any, fullNotes, workShift as 'نهار' | 'ليل' || undefined, decisionResult === 'مستبعد' ? exclusionReason : undefined)
       }
       alert(t('candidates.alerts.statusUpdated', 'تم تحديث حالة المرشح وحفظه في قاعدة البيانات بنجاح'))
       setShowDecisionModal(false)
@@ -114,6 +122,7 @@ const CandidatesPage: React.FC = () => {
       setWorkLocation('')
       setStartDate('')
       setRejectionReason('')
+      setExclusionReason('')
     } catch (error) {
       console.error('Error saving decision:', error)
       alert(t('candidates.alerts.statusUpdateError', 'حدث خطأ في حفظ القرار'))
@@ -170,6 +179,27 @@ const CandidatesPage: React.FC = () => {
 
   const toggleSelectAll = () =>
     setSelectedIds(prev => prev.length === filteredCandidates.length ? [] : filteredCandidates.map(c => c.id))
+  const handleExportExcel = () => {
+    const data = filteredCandidates.map(c => ({
+      'الاسم': c.name,
+      'الرقم القومي': c.nationalId,
+      'تاريخ الميلاد': c.birthDate,
+      'المحافظة': c.governorate,
+      'المؤهل': c.qualification,
+      'الحالة الاجتماعية': c.maritalStatus,
+      'شركة الأمن': c.securityCompany,
+      'الوظيفة': c.position || '',
+      'الموبايل': (c as any).phone || '',
+      'تاريخ العرض': c.offerDate || '',
+      'الوردية': (c as any).workShift || '',
+      'النتيجة': c.offerResult,
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Candidates')
+    XLSX.writeFile(wb, `Candidates_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
   const perms = usePermissions()
   const canAddCandidate = perms.canAddCandidates
   const canUpdateStatus = perms.canApproveCandidates
@@ -203,6 +233,9 @@ const CandidatesPage: React.FC = () => {
                 {t('candidates.addCandidate', 'إضافة مرشح')}
               </button>
             )}
+            <button className="btn btn-success btn-sm" onClick={handleExportExcel} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Download size={14} /> {t('general.export', 'Excel')}
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <Printer size={14} /> {selectedIds.length > 0 ? `${t('general.print')} (${selectedIds.length})` : t('general.print', 'طباعة')}
             </button>
@@ -229,6 +262,8 @@ const CandidatesPage: React.FC = () => {
           <MultiSelect options={allPositions} selectedValues={filterPosition} onChange={setFilterPosition} placeholder={t('candidates.columns.position', 'الوظيفة')} />
           <MultiSelect options={GOVERNORATES} selectedValues={filterGovernorate} onChange={setFilterGovernorate} placeholder={t('candidates.columns.governorate', 'المحافظة')} />
           <MultiSelect options={['مقبول','مرفوض','مستبعد','في انتظار']} selectedValues={filterResult} onChange={setFilterResult} placeholder={t('candidates.columns.status', 'النتيجة')} />
+          <MultiSelect options={['أعزب','متزوج','مطلق','أرمل']} selectedValues={filterMaritalStatus} onChange={setFilterMaritalStatus} placeholder={t('candidates.columns.maritalStatus', 'الحالة الاجتماعية')} />
+          <MultiSelect options={['نهار','ليل']} selectedValues={filterShift} onChange={setFilterShift} placeholder={t('candidates.columns.shift', 'الوردية')} />
         </div>
 
         {/* ── Add form ── */}
@@ -281,7 +316,7 @@ const CandidatesPage: React.FC = () => {
                   {canEdit && <th className="print-hidden" style={{ width: '40px' }}>
                     <input type="checkbox" checked={selectedIds.length === filteredCandidates.length && filteredCandidates.length > 0} onChange={toggleSelectAll} style={{ cursor: 'pointer', accentColor: '#8b5cf6' }} />
                   </th>}
-                  {[t('candidates.columns.name','الاسم'), t('candidates.columns.nationalId','الرقم القومي'), t('candidates.columns.birthDate','تاريخ الميلاد'), t('candidates.columns.governorate','المحافظة'), t('candidates.columns.qualification','المؤهل'), t('candidates.columns.maritalStatus','الحالة'), t('candidates.columns.company','الشركة'), t('candidates.columns.position','الوظيفة'), t('candidates.columns.mobile','الموبايل'), t('candidates.columns.status','النتيجة')].map(h => <th key={h}>{h}</th>)}
+                  {[t('candidates.columns.name','الاسم'), t('candidates.columns.nationalId','الرقم القومي'), t('candidates.columns.birthDate','تاريخ الميلاد'), t('candidates.columns.governorate','المحافظة'), t('candidates.columns.qualification','المؤهل'), t('candidates.columns.maritalStatus','الحالة'), t('candidates.columns.company','الشركة'), t('candidates.columns.position','الوظيفة'), t('candidates.columns.mobile','الموبايل'), t('candidates.columns.addDate','تاريخ العرض'), t('candidates.columns.status','النتيجة')].map(h => <th key={h}>{h}</th>)}
                   {canUpdateStatus && <th className="print-hidden">{t('candidates.columns.actions','الإجراءات')}</th>}
                   {canEdit && <th className="print-hidden">{t('actions.edit','تعديل')}</th>}
                   {canDelete && <th className="print-hidden">{t('actions.delete','حذف')}</th>}
@@ -307,6 +342,7 @@ const CandidatesPage: React.FC = () => {
                     <td style={{ fontWeight: 600, color: 'hsl(var(--primary))' }}>{candidate.securityCompany}</td>
                     <td>{candidate.position || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}</td>
                     <td>{(candidate as any).phone || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}</td>
+                    <td>{candidate.offerDate || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}</td>
                     <td>
                       <span className={candidate.offerResult === 'مقبول' ? 'badge badge-success' : candidate.offerResult === 'مرفوض' ? 'badge badge-danger' : candidate.offerResult === 'مستبعد' ? 'badge badge-warning' : 'badge badge-info'}>
                         {candidate.offerResult}
@@ -317,6 +353,7 @@ const CandidatesPage: React.FC = () => {
                         <div style={{ display: 'flex', gap: '5px' }}>
                           <button className="btn btn-success btn-sm" onClick={() => handleStatusUpdate(candidate.id,'تم التوظيف','مقبول')}>قبول</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleStatusUpdate(candidate.id,'مرفوض','مرفوض')}>رفض</button>
+                          <button className="btn btn-warning btn-sm" onClick={() => handleStatusUpdate(candidate.id,'مستبعد','مستبعد')}>استبعاد</button>
                         </div>
                       </td>
                     )}
@@ -418,7 +455,7 @@ const CandidatesPage: React.FC = () => {
           <div className="modal-overlay">
             <div className="modal-box">
               <div className="modal-header">
-                <h3>{decisionResult === 'مقبول' ? '✅ قبول المرشح' : '❌ رفض المرشح'}: {selectedCandidate?.name}</h3>
+                <h3>{decisionResult === 'مقبول' ? '✅ قبول المرشح' : decisionResult === 'مرفوض' ? '❌ رفض المرشح' : '⚠️ استبعاد المرشح'}: {selectedCandidate?.name}</h3>
                 <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }} onClick={() => setShowDecisionModal(false)}>✕</button>
               </div>
               <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -461,6 +498,14 @@ const CandidatesPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* سبب الاستبعاد */}
+                {decisionResult === 'مستبعد' && (
+                  <div>
+                    <label className="form-label">سبب الاستبعاد</label>
+                    <textarea className="form-input" value={exclusionReason} onChange={e => setExclusionReason(e.target.value)} placeholder="اذكر سبب الاستبعاد..." style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                )}
+
                 {/* الملاحظات */}
                 <div>
                   <label className="form-label">ملاحظات إضافية (اختياري)</label>
@@ -470,7 +515,7 @@ const CandidatesPage: React.FC = () => {
               </div>
               <div className="modal-footer">
                 <button className="btn btn-ghost" onClick={() => setShowDecisionModal(false)}>إلغاء</button>
-                <button className={`btn ${decisionResult === 'مقبول' ? 'btn-success' : 'btn-danger'}`} onClick={handleSubmitDecision}>
+                <button className={`btn ${decisionResult === 'مقبول' ? 'btn-success' : decisionResult === 'مرفوض' ? 'btn-danger' : 'btn-warning'}`} onClick={handleSubmitDecision}>
                   تأكيد القرار
                 </button>
               </div>

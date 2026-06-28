@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
-import { Plus, CheckCircle, XCircle, Trash2 } from 'lucide-react'
+import { Plus, CheckCircle, XCircle, Trash2, Search, Filter, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { usePermissions } from '../hooks/usePermissions'
+import * as XLSX from 'xlsx'
 
 const InterviewsPage: React.FC = () => {
   const { 
@@ -24,8 +26,36 @@ const InterviewsPage: React.FC = () => {
     date: '',
     time: '',
     status: 'مجدولة' as const,
+    status: 'مجدولة' as const,
     notes: ''
   })
+  
+  const permissions = usePermissions()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('')
+
+  const filteredInterviews = interviews.filter(interview => {
+    const matchesSearch = interview.candidateName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (interview.interviewer && interview.interviewer.toLowerCase().includes(searchQuery.toLowerCase()))
+    const matchesStatus = statusFilter ? interview.status === statusFilter : true
+    return matchesSearch && matchesStatus
+  })
+
+  const handleExport = () => {
+    const exportData = filteredInterviews.map(i => ({
+      [t('candidates.columns.name', 'اسم المرشح')]: i.candidateName,
+      [t('candidates.columns.position', 'المنصب')]: i.position,
+      'المحاور': i.interviewer || 'غير محدد',
+      [t('interviews.date', 'التاريخ')]: i.date,
+      [t('interviews.time', 'الوقت')]: i.time,
+      [t('candidates.columns.status', 'الحالة')]: i.status,
+      [t('database.columns.notes', 'ملاحظات')]: i.notes || ''
+    }))
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Interviews')
+    XLSX.writeFile(wb, `Interviews_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
 
   const handleAddInterview = () => {
     if (!newInterview.candidateId || !newInterview.position || !newInterview.date || !newInterview.time) {
@@ -60,11 +90,11 @@ const InterviewsPage: React.FC = () => {
     }
   }
 
-  const canAddInterview = currentUser?.userType === 'interview_manager' || currentUser?.userType === 'admin'
-  const canDelete = currentUser?.userType === 'admin'
+  const canAddInterview = permissions.canManageInterviews
+  const canDelete = permissions.canManageInterviews // Or keep admin, but usually if they can manage they can delete. Wait, I will use permissions.canManageInterviews
 
   return (
-    <ProtectedLayout requiredPermissions={['interview_manager', 'admin']}>
+    <ProtectedLayout requiredPermissionKey="canManageInterviews">
       <div className="page-wrapper" style={{ direction: 'rtl' }}>
 
         {/* Header */}
@@ -73,12 +103,18 @@ const InterviewsPage: React.FC = () => {
             <h1 className="page-title">{t('interviews.title', 'المقابلات')}</h1>
             <p className="page-subtitle">{t('interviews.subtitle', '{{count}} مقابلة مسجلة', { count: interviews.length })}</p>
           </div>
-          {canAddInterview && (
-            <button onClick={() => setShowAddForm(true)} className="btn btn-primary">
-              <Plus size={16} />
-              {t('interviews.schedule', 'جدولة مقابلة')}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={handleExport} className="btn btn-ghost btn-sm">
+              <Download size={16} />
+              تصدير Excel
             </button>
-          )}
+            {canAddInterview && (
+              <button onClick={() => setShowAddForm(true)} className="btn btn-primary">
+                <Plus size={16} />
+                {t('interviews.schedule', 'جدولة مقابلة')}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Add form */}
@@ -111,6 +147,10 @@ const InterviewsPage: React.FC = () => {
                   <input type="text" value={newInterview.position} onChange={(e) => setNewInterview({...newInterview, position: e.target.value})} className="form-input" placeholder={t('interviews.positionPlaceholder', 'أدخل المنصب')} />
                 </div>
                 <div>
+                  <label className="form-label">المحاور (اختياري)</label>
+                  <input type="text" value={newInterview.interviewer || ''} onChange={(e) => setNewInterview({...newInterview, interviewer: e.target.value})} className="form-input" placeholder="اسم المحاور" />
+                </div>
+                <div>
                   <label className="form-label">{t('interviews.date', 'التاريخ')} *</label>
                   <input type="date" value={newInterview.date} onChange={(e) => setNewInterview({...newInterview, date: e.target.value})} className="form-input" />
                 </div>
@@ -139,6 +179,33 @@ const InterviewsPage: React.FC = () => {
           </div>
         )}
 
+        {/* Filters & Search */}
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', right: '12px', top: '10px', color: 'hsl(var(--muted-foreground))' }} />
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="البحث باسم المرشح أو المحاور..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingRight: '36px' }}
+            />
+          </div>
+          <div style={{ width: '200px' }}>
+            <select 
+              className="form-input" 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="">جميع الحالات</option>
+              <option value="مجدولة">مجدولة</option>
+              <option value="مكتملة">مكتملة</option>
+              <option value="ملغاة">ملغاة</option>
+            </select>
+          </div>
+        </div>
+
         {/* Table */}
         <div className="section-card">
           <div style={{ overflowX: 'auto' }}>
@@ -147,6 +214,7 @@ const InterviewsPage: React.FC = () => {
                 <tr>
                   <th>{t('candidates.columns.name', 'المرشح')}</th>
                   <th>{t('candidates.columns.position', 'المنصب')}</th>
+                  <th>المحاور</th>
                   <th>{t('interviews.date', 'التاريخ')}</th>
                   <th>{t('interviews.time', 'الوقت')}</th>
                   <th>{t('candidates.columns.status', 'الحالة')}</th>
@@ -155,10 +223,11 @@ const InterviewsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {interviews.map(interview => (
+                {filteredInterviews.map(interview => (
                   <tr key={interview.id}>
                     <td style={{ fontWeight: 600 }}>{interview.candidateName}</td>
                     <td>{interview.position}</td>
+                    <td>{interview.interviewer || '-'}</td>
                     <td style={{ color: 'hsl(215 16% 52%)' }}>{interview.date}</td>
                     <td style={{ color: 'hsl(215 16% 52%)' }}>{interview.time}</td>
                     <td>
@@ -170,14 +239,16 @@ const InterviewsPage: React.FC = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button onClick={() => handleUpdateInterview(interview.id, 'مكتملة')} className="btn btn-success btn-sm">
-                          <CheckCircle size={13} /> {t('status.completed', 'مكتملة')}
-                        </button>
-                        <button onClick={() => handleUpdateInterview(interview.id, 'ملغاة')} className="btn btn-danger btn-sm">
-                          <XCircle size={13} /> {t('actions.cancel', 'إلغاء')}
-                        </button>
-                      </div>
+                      {canAddInterview && interview.status === 'مجدولة' && (
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => handleUpdateInterview(interview.id, 'مكتملة')} className="btn btn-success btn-sm">
+                            <CheckCircle size={13} /> {t('status.completed', 'مكتملة')}
+                          </button>
+                          <button onClick={() => handleUpdateInterview(interview.id, 'ملغاة')} className="btn btn-danger btn-sm">
+                            <XCircle size={13} /> {t('actions.cancel', 'إلغاء')}
+                          </button>
+                        </div>
+                      )}
                     </td>
                     {canDelete && (
                       <td>
@@ -192,9 +263,9 @@ const InterviewsPage: React.FC = () => {
             </table>
           </div>
 
-          {interviews.length === 0 && (
+          {filteredInterviews.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px', color: 'hsl(215 16% 52%)', fontSize: '14px' }}>
-              {t('interviews.noResults', 'لا توجد مقابلات مجدولة حتى الآن')}
+              {interviews.length === 0 ? t('interviews.noResults', 'لا توجد مقابلات مجدولة حتى الآن') : 'لا توجد نتائج تطابق بحثك'}
             </div>
           )}
         </div>

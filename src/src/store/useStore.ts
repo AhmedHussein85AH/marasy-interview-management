@@ -312,7 +312,7 @@ export const useStore = create<AppState>()(
           // جلب بيانات المستخدم من جدول users في Supabase (بدون حساسية الأحرف)
           const { data, error } = await supabase
             .from('users')
-            .select('id, name, email, user_type, department, created_at, is_active')
+            .select('id, name, email, user_type, department, created_at, is_active, permissions')
             .ilike('email', email.trim())
             .maybeSingle()
 
@@ -337,7 +337,7 @@ export const useStore = create<AppState>()(
             department: data.department,
             createdAt: data.created_at,
             isActive: data.is_active ?? true,
-            permissions: (data as any).permissions || undefined,
+            permissions: data.permissions ? (data.permissions as any) : undefined,
           }
 
           set({ currentUser: mappedUser })
@@ -1320,6 +1320,21 @@ export const useStore = create<AppState>()(
         await get().loadDataFromSupabase()
         await get().loadUsersFromSupabase()
 
+        // تحديث بيانات المستخدم الحالي من قائمة المستخدمين المحملة حديثاً من قاعدة البيانات لضمان تحديث الصلاحيات والحالة النشطة
+        const currentRestoredUser = get().currentUser
+        if (currentRestoredUser) {
+          const freshUser = get().users.find(u => u.email.toLowerCase() === currentRestoredUser.email.toLowerCase())
+          if (freshUser) {
+            if (freshUser.isActive === false) {
+              console.log('الحساب معطل، جاري تسجيل الخروج تلقائياً')
+              await get().logout()
+            } else {
+              set({ currentUser: freshUser })
+              get().saveUserSession(freshUser)
+            }
+          }
+        }
+
         // إعداد الاشتراكات التلقائية
         get().setupRealtimeSubscriptions()
 
@@ -1332,7 +1347,7 @@ export const useStore = create<AppState>()(
         try {
           const { data, error } = await supabase
             .from('users')
-            .select('id, name, email, user_type, department, created_at, is_active')
+            .select('id, name, email, user_type, department, created_at, is_active, permissions')
             .order('created_at', { ascending: false })
           
           if (!error && data) {
@@ -1343,7 +1358,8 @@ export const useStore = create<AppState>()(
               userType: u.user_type as UserType,
               department: u.department,
               createdAt: u.created_at,
-              isActive: u.is_active ?? true // افتراضياً نشط إذا كانت القيمة null
+              isActive: u.is_active ?? true, // افتراضياً نشط إذا كانت القيمة null
+              permissions: u.permissions ? (u.permissions as any) : undefined
             }))
             set({ users: mapped })
           }
@@ -1490,9 +1506,22 @@ export const useStore = create<AppState>()(
             .update({ permissions: permissions as any })
             .eq('id', id)
           if (error) throw error
-          set(state => ({
-            users: state.users.map(u => u.id === id ? { ...u, permissions } : u)
-          }))
+          set(state => {
+            const updatedUsers = state.users.map(u => u.id === id ? { ...u, permissions } : u)
+            const isSelf = state.currentUser?.id === id
+            const updatedCurrentUser = isSelf && state.currentUser
+              ? { ...state.currentUser, permissions }
+              : state.currentUser
+
+            if (isSelf && updatedCurrentUser) {
+              localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser))
+            }
+
+            return {
+              users: updatedUsers,
+              currentUser: updatedCurrentUser
+            }
+          })
         } catch (error) {
           console.error('خطأ في تحديث الصلاحيات:', error)
           throw error

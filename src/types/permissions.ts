@@ -8,6 +8,9 @@ export interface UserPermissions {
   canApproveCandidates: boolean   // قبول / رفض
   canBulkEditCandidates: boolean  // تعديل جماعي
 
+  // المقابلات
+  canManageInterviews: boolean
+
   // قاعدة البيانات
   canViewDatabase: boolean
   canDeleteFromDatabase: boolean
@@ -40,6 +43,7 @@ export const DEFAULT_PERMISSIONS: Record<string, UserPermissions> = {
     canDeleteCandidates: true,
     canApproveCandidates: true,
     canBulkEditCandidates: true,
+    canManageInterviews: true,
     canViewDatabase: true,
     canDeleteFromDatabase: true,
     canExcludeFromDatabase: true,
@@ -58,6 +62,7 @@ export const DEFAULT_PERMISSIONS: Record<string, UserPermissions> = {
     canDeleteCandidates: false,
     canApproveCandidates: true,
     canBulkEditCandidates: false,
+    canManageInterviews: true,
     canViewDatabase: true,
     canDeleteFromDatabase: false,
     canExcludeFromDatabase: true,
@@ -76,6 +81,7 @@ export const DEFAULT_PERMISSIONS: Record<string, UserPermissions> = {
     canDeleteCandidates: false,
     canApproveCandidates: false,
     canBulkEditCandidates: true,
+    canManageInterviews: false,
     canViewDatabase: true,
     canDeleteFromDatabase: false,
     canExcludeFromDatabase: false,
@@ -97,6 +103,7 @@ export const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canDeleteCandidates:   'حذف المرشحين',
   canApproveCandidates:  'قبول / رفض المرشحين',
   canBulkEditCandidates: 'تعديل جماعي للمرشحين',
+  canManageInterviews:   'إدارة المقابلات',
   canViewDatabase:       'عرض قاعدة البيانات',
   canDeleteFromDatabase: 'حذف من قاعدة البيانات',
   canExcludeFromDatabase:'استبعاد / استقالة من قاعدة البيانات',
@@ -114,6 +121,10 @@ export const PERMISSION_GROUPS: { label: string; keys: (keyof UserPermissions)[]
   {
     label: 'المرشحون',
     keys: ['canViewCandidates','canAddCandidates','canEditCandidates','canDeleteCandidates','canApproveCandidates','canBulkEditCandidates'],
+  },
+  {
+    label: 'المقابلات',
+    keys: ['canManageInterviews'],
   },
   {
     label: 'قاعدة البيانات',
