@@ -59,19 +59,14 @@ const DashboardPage: React.FC = () => {
     return mergedCandidates.filter(c => c.offerResult === 'مقبول').length
   }
 
-  const getResignedCandidates = () => {
-    return savedCandidates.filter(c => c.finalResult === 'استقالة').length
-  }
-
   const unreadNotifications = getUnreadNotifications()
 
   const stats = [
-    { label: t('dashboard.stats.totalCandidates'),     value: mergedCandidates.length,     icon: Users,           color: 'blue' },
-    { label: t('dashboard.stats.newCandidates'),       value: getNewCandidates(),          icon: UserCheck,       color: 'green' },
-    { label: t('dashboard.stats.pendingInterviews'),   value: getPendingInterviews(),      icon: CalendarClock,   color: 'orange' },
-    { label: t('dashboard.stats.completedInterviews'), value: getCompletedInterviews(),    icon: CalendarCheck2,  color: 'purple' },
-    { label: t('dashboard.stats.hiredCandidates'),     value: getHiredCandidates(),        icon: TrendingUp,      color: 'green' },
-    { label: t('dashboard.stats.savedCandidates', 'في قاعدة البيانات'), value: savedCandidates.length, icon: Database, color: 'cyan' },
+    { label: t('dashboard.stats.totalCandidates'),  value: mergedCandidates.length,        icon: Users,           color: 'blue' },
+    { label: t('dashboard.stats.newCandidates'),       value: getNewCandidates(),        icon: UserCheck,       color: 'green' },
+    { label: t('dashboard.stats.pendingInterviews'),   value: getPendingInterviews(),    icon: CalendarClock,   color: 'orange' },
+    { label: t('dashboard.stats.completedInterviews'),   value: getCompletedInterviews(),  icon: CalendarCheck2,  color: 'purple' },
+    { label: t('dashboard.stats.hiredCandidates'),   value: getHiredCandidates(),      icon: TrendingUp,      color: 'green' },
   ]
 
   const getStatusBadge = (result: string) => {
