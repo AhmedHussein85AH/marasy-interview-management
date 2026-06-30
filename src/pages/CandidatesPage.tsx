@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { GOVERNORATES } from '../constants/lists'
@@ -52,6 +52,19 @@ const CandidatesPage: React.FC = () => {
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [bulkField, setBulkField] = useState('')
   const [bulkValue, setBulkValue] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 100
+
+  const paginatedCandidates = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return filteredCandidates.slice(start, start + PAGE_SIZE)
+  }, [filteredCandidates, currentPage])
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filterCompany, filterPosition, filterGovernorate, filterResult, filterMaritalStatus, filterShift])
 
   useEffect(() => {
     let filtered = searchQuery ? searchCandidates(searchQuery) : candidates
@@ -323,7 +336,7 @@ const CandidatesPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCandidates.map(candidate => (
+                {paginatedCandidates.map(candidate => (
                   <tr key={candidate.id} className={selectedIds.includes(candidate.id) ? 'selected' : ''}>
                     {canEdit && <td className="print-hidden"><input type="checkbox" checked={selectedIds.includes(candidate.id)} onChange={() => toggleSelect(candidate.id)} style={{ cursor: 'pointer', accentColor: '#8b5cf6' }} /></td>}
                     <td>
@@ -380,6 +393,24 @@ const CandidatesPage: React.FC = () => {
             <div className="empty-state">لا توجد نتائج مطابقة</div>
           )}
         </div>
+
+        {/* ── Pagination ── */}
+        {totalPages > 1 && (
+          <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '16px' }}>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(1)} style={{ opacity: currentPage === 1 ? 0.4 : 1 }}>{'<<'}</button>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ opacity: currentPage === 1 ? 0.4 : 1 }}>{'<'}</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+              .map((p, idx, arr) => (
+                <React.Fragment key={p}>
+                  {idx > 0 && arr[idx - 1] !== p - 1 && <span style={{ opacity: 0.4 }}>...</span>}
+                  <button className={`btn btn-sm ${p === currentPage ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCurrentPage(p)}>{p}</button>
+                </React.Fragment>
+              ))}
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>{'>'}</button>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>{'>>'}</button>
+          </div>
+        )}
 
         {/* ── Bulk Edit Modal ── */}
         {showBulkEdit && (

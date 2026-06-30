@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { supabase } from '../integrations/supabase/client'
@@ -22,7 +22,6 @@ const DatabasePage: React.FC = () => {
     getUnreadNotifications,
     markNotificationAsRead,
     saveCandidateToDatabase,
-    logAction,
     set
   } = useStore()
 
@@ -43,6 +42,19 @@ const DatabasePage: React.FC = () => {
   const [selectedCandidateId, setSelectedCandidateId] = useState<string>('')
   const [exclusionReason, setExclusionReason] = useState('')
   const [resignationReason, setResignationReason] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 100
+
+  const paginatedCandidates = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return filteredCandidates.slice(start, start + PAGE_SIZE)
+  }, [filteredCandidates, currentPage])
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filterResult, filterCompany, filterPosition, filterGovernorate])
 
   useEffect(() => {
     let filtered = savedCandidates
@@ -72,14 +84,23 @@ const DatabasePage: React.FC = () => {
     }
   }
 
-  const unreadNotifications = getUnreadNotifications()
+  const unreadNotifications = useMemo(() => getUnreadNotifications(), [getUnreadNotifications, savedCandidates])
+  const resultStats = useMemo(() => ({
+    accepted: getSavedCandidatesByResult('مقبول').length,
+    rejected: getSavedCandidatesByResult('مرفوض').length,
+    excluded: getSavedCandidatesByResult('مستبعد').length,
+    resigned: getSavedCandidatesByResult('استقالة').length,
+  }), [getSavedCandidatesByResult, savedCandidates])
 
   const perms = usePermissions()
   const canViewDatabase = perms.canViewDatabase
   const canDelete = perms.canDeleteFromDatabase
   const canExclude = perms.canExcludeFromDatabase
 
-  const uniqueCompanies = Array.from(new Set(savedCandidates.map(c => c.securityCompany))).filter(Boolean)
+  const uniqueCompanies = useMemo(
+    () => Array.from(new Set(savedCandidates.map(c => c.securityCompany))).filter(Boolean),
+    [savedCandidates]
+  )
   const { allPositions } = useEditableLists()
 
   // وظائف التعامل مع الاختيار
@@ -259,9 +280,6 @@ const DatabasePage: React.FC = () => {
           )
         }))
 
-        // تسجيل النشاط
-        logAction('استقالة', 'مرشح محفوظ', candidate.name, `السبب: ${resignationReason}`)
-
         alert('تم تسجيل استقالة المرشح بنجاح')
         setShowResignationModal(false)
         setResignationReason('')
@@ -393,10 +411,10 @@ const DatabasePage: React.FC = () => {
         {/* ── Stats mini ── */}
         <div className="stats-mini">
           {[
-            { label: t('status.accepted'),  value: getSavedCandidatesByResult('مقبول').length,  color: 'hsl(var(--success))' },
-            { label: t('status.rejected'),  value: getSavedCandidatesByResult('مرفوض').length,  color: 'hsl(var(--danger))' },
-            { label: t('status.excluded'),  value: getSavedCandidatesByResult('مستبعد').length, color: 'hsl(var(--warning))' },
-            { label: t('status.resigned', 'استقالة'), value: getSavedCandidatesByResult('استقالة').length, color: 'hsl(var(--purple))' },
+            { label: t('status.accepted'),  value: resultStats.accepted,  color: 'hsl(var(--success))' },
+            { label: t('status.rejected'),  value: resultStats.rejected,  color: 'hsl(var(--danger))' },
+            { label: t('status.excluded'),  value: resultStats.excluded, color: 'hsl(var(--warning))' },
+            { label: t('status.resigned', 'استقالة'), value: resultStats.resigned, color: 'hsl(var(--purple))' },
             { label: i18n.language === 'en' ? 'Total' : 'الإجمالي', value: savedCandidates.length, color: 'hsl(var(--primary))' },
           ].map(s => (
             <div key={s.label} className="stats-mini-card">
@@ -478,7 +496,7 @@ const DatabasePage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCandidates.map(candidate => (
+                {paginatedCandidates.map(candidate => (
                   <tr key={candidate.id} className={selectedCandidates.includes(candidate.id) ? 'selected' : ''}>
                     {canDelete && (
                       <td>
@@ -552,6 +570,24 @@ const DatabasePage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* ── Pagination ── */}
+        {totalPages > 1 && (
+          <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '16px' }}>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(1)} style={{ opacity: currentPage === 1 ? 0.4 : 1 }}>{'<<'}</button>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ opacity: currentPage === 1 ? 0.4 : 1 }}>{'<'}</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+              .map((p, idx, arr) => (
+                <React.Fragment key={p}>
+                  {idx > 0 && arr[idx - 1] !== p - 1 && <span style={{ opacity: 0.4 }}>...</span>}
+                  <button className={`btn btn-sm ${p === currentPage ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCurrentPage(p)}>{p}</button>
+                </React.Fragment>
+              ))}
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>{'>'}</button>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>{'>>'}</button>
+          </div>
+        )}
 
         {/* ── Delete confirm modal ── */}
         {showDeleteConfirm && (

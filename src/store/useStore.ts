@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../integrations/supabase/client'
 import { Database } from '../integrations/supabase/types'
 import type { UserPermissions } from '../types/permissions'
+import { queryClient } from '../lib/queryClient'
 
 type Tables = Database['public']['Tables']
 
@@ -99,18 +100,6 @@ export interface LoginLog {
   longitude?: number
   isActive: boolean
   sessionId?: string
-  createdAt: string
-}
-
-// واجهة مراقبة الأنشطة (Audit Log)
-export interface AuditLog {
-  id: string
-  userId: string
-  userName: string
-  actionType: 'إضافة' | 'تعديل' | 'حذف' | 'قبول' | 'رفض' | 'استبعاد' | 'استقالة'
-  targetType: 'مرشح' | 'مستخدم' | 'مقابلة' | 'مرشح محفوظ'
-  targetName: string
-  details: string
   createdAt: string
 }
 
@@ -214,10 +203,6 @@ export interface AppState {
   loadLoginLogs: () => Promise<void>
   getActiveSessions: () => LoginLog[]
 
-  // مراقبة الأنشطة
-  auditLogs: AuditLog[]
-  loadAuditLogs: () => Promise<void>
-  logAction: (actionType: AuditLog['actionType'], targetType: AuditLog['targetType'], targetName: string, details: string) => Promise<void>
   }
 
 // متغيرات لتخزين الاشتراكات
@@ -226,6 +211,7 @@ let savedCandidatesSubscription: any = null
 let interviewsSubscription: any = null
 let notificationsSubscription: any = null
 let usersSubscription: any = null
+let loginLogsSubscription: any = null
 
 // إنشاء المتجر - بدون تخزين محلي
 export const useStore = create<AppState>()(
@@ -238,7 +224,6 @@ export const useStore = create<AppState>()(
       notifications: [],
       interviews: [],
       loginLogs: [],
-      auditLogs: [],
       stats: {
         totalCandidates: 0,
         pendingInterviews: 0,
@@ -384,23 +369,17 @@ export const useStore = create<AppState>()(
         if (!currentUser) return
 
         try {
-          // فحص التكرار من قاعدة البيانات أولاً
-          const { data: existingInDB } = await supabase
-            .from('candidates')
-            .select('id, national_id')
-            .eq('national_id', candidateData.nationalId)
-            .maybeSingle()
-
-          if (existingInDB) {
+          // فحص التكرار من الحالة المحلية أولاً (بدون طلب DB)
+          if (candidates.some(c => c.nationalId === candidateData.nationalId)) {
             throw new Error(`المرشح برقم قومي ${candidateData.nationalId} موجود مسبقاً في قاعدة البيانات`)
           }
 
-          // فحص إذا كان المرشح مرفوض من قبل
-          const rejectedBefore = savedCandidates.find(
+          // فحص المرفوضين من الحالة المحلية أولاً
+          let rejectedBefore = savedCandidates.find(
             saved => saved.nationalId === candidateData.nationalId && saved.finalResult === 'مرفوض'
           )
-          
-          // فحص أيضاً من قاعدة البيانات
+
+          // الفحص من DB فقط لو مش موجود local
           if (!rejectedBefore) {
             const { data: rejectedInDB } = await supabase
               .from('saved_candidates')
@@ -408,46 +387,13 @@ export const useStore = create<AppState>()(
               .eq('national_id', candidateData.nationalId)
               .eq('final_result', 'مرفوض')
               .maybeSingle()
-            
+
             if (rejectedInDB) {
-              // إعادة تحميل savedCandidates من قاعدة البيانات
-              const { data: savedData } = await supabase
-                .from('saved_candidates')
-                .select('*')
-                .eq('national_id', candidateData.nationalId)
-                .eq('final_result', 'مرفوض')
-                .single()
-              
-              if (savedData) {
-                const transformed: SavedCandidate = {
-                  id: savedData.id,
-                  name: savedData.name,
-                  nationalId: savedData.national_id,
-                  birthDate: savedData.birth_date,
-                  governorate: savedData.governorate,
-                  qualification: savedData.qualification,
-                  maritalStatus: savedData.marital_status,
-                  securityCompany: savedData.security_company,
-                  position: savedData.position,
-                  offerDate: savedData.offer_date,
-                  finalResult: savedData.final_result,
-                  decisionDate: savedData.decision_date,
-                  decisionBy: savedData.decision_by,
-                  notes: savedData.notes,
-                  workShift: savedData.work_shift,
-                  exclusionReason: savedData.exclusion_reason,
-                  resignationReason: savedData.resignation_reason,
-                  isRejectedBefore: savedData.is_rejected_before,
-                  previousRejectionDate: savedData.previous_rejection_date,
-                  createdAt: savedData.created_at
-                }
-                // تحديث الحالة المحلية
-                set(state => ({
-                  savedCandidates: state.savedCandidates.some(s => s.id === transformed.id)
-                    ? state.savedCandidates
-                    : [...state.savedCandidates, transformed]
-                }))
-              }
+              // تحويل البيانات فوراً بدون refetch
+              rejectedBefore = {
+                nationalId: candidateData.nationalId,
+                decisionDate: rejectedInDB.decision_date,
+              } as any
             }
           }
 
@@ -486,34 +432,28 @@ export const useStore = create<AppState>()(
             throw error
           }
 
-          // إشعار مرشح جديد لمسئولي المقابلات
-          const newCandidateNotification = {
-            type: 'new_candidate' as const,
+          // إشعارات مرشح جديد (دفعة واحدة)
+          const notificationsToInsert: any[] = [{
+            type: 'new_candidate',
             title: 'مرشح جديد',
             message: `تم إضافة مرشح جديد: ${candidateData.name}`,
             candidate_id: data.id,
             candidate_name: candidateData.name,
             is_read: false
-          }
-          await supabase
-            .from('notifications')
-            .insert([newCandidateNotification])
+          }]
 
-          // إضافة الإشعار إذا كان مرفوض من قبل
           if (rejectedBefore) {
-            const notification = {
-              type: 'rejected_before' as const,
+            notificationsToInsert.push({
+              type: 'rejected_before',
               title: 'مرشح مرفوض من قبل',
               message: `تم تسجيل مرشح جديد (${candidateData.name}) تم رفضه من قبل في ${rejectedBefore.decisionDate}`,
               candidate_id: data.id,
               candidate_name: candidateData.name,
               is_read: false
-            }
-
-            await supabase
-              .from('notifications')
-              .insert([notification])
+            })
           }
+
+          await supabase.from('notifications').insert(notificationsToInsert)
 
           // تحويل البيانات من snake_case إلى camelCase
           const transformedCandidate: Candidate = {
@@ -830,24 +770,24 @@ export const useStore = create<AppState>()(
         if (!currentUser) return
 
         try {
-          // فحص التكرار من قاعدة البيانات أولاً
-          const { data: existingInDB } = await supabase
-            .from('saved_candidates')
-            .select('*')
-            .eq('national_id', candidate.nationalId)
-            .maybeSingle()
-
-          // فحص إذا كان المرشح محفوظ مسبقاً بنفس الرقم القومي (من الحالة المحلية أو قاعدة البيانات)
-          const existingCandidate = existingInDB ? {
-            id: existingInDB.id,
-            nationalId: existingInDB.national_id,
-            // ... باقي البيانات
-          } : savedCandidates.find(
+          // فحص التكرار من الحالة المحلية أولاً (بدون طلب DB)
+          const localExisting = savedCandidates.find(
             saved => saved.nationalId === candidate.nationalId
           )
 
-          if (existingCandidate || existingInDB) {
-            const existingId = existingInDB?.id || existingCandidate?.id
+          // لو مش موجود local، نفحص من DB
+          let existingInDB = null
+          if (!localExisting) {
+            const { data } = await supabase
+              .from('saved_candidates')
+              .select('id')
+              .eq('national_id', candidate.nationalId)
+              .maybeSingle()
+            existingInDB = data
+          }
+
+          if (localExisting || existingInDB) {
+            const existingId = existingInDB?.id || localExisting?.id
             // تحديث السجل الموجود بدلاً من إنشاء سجل جديد
             const updatedCandidate = {
               name: candidate.name,
@@ -1201,6 +1141,13 @@ export const useStore = create<AppState>()(
       // تحميل البيانات من Supabase
       loadDataFromSupabase: async () => {
         try {
+          // التحقق من وجود بيانات حديثة في TanStack Query cache
+          const freshData = queryClient.getQueryData(['candidates'])
+          if (freshData) {
+            // البيانات موجودة في cache ومحدثة — نستخدمها
+            return
+          }
+
           // دالة مساعدة لجلب كل البيانات بتخطي حد الـ 1000
           const fetchAll = async (table: string) => {
             let allData: any[] = []
@@ -1316,14 +1263,32 @@ export const useStore = create<AppState>()(
             createdAt: saved.created_at
           }))
 
+          // تحويل الإشعارات من snake_case إلى camelCase
+          const transformedNotifications: Notification[] = (notifications || []).map(n => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            candidateId: n.candidate_id,
+            candidateName: n.candidate_name,
+            isRead: n.is_read,
+            createdAt: n.created_at
+          }))
+
           set({
             candidates: transformedCandidates,
             interviews: transformedInterviews,
             savedCandidates: transformedSavedCandidates,
-            notifications: notifications || [],
+            notifications: transformedNotifications,
             stats,
             isInitialized: true
           })
+
+          // تخزين البيانات في TanStack Query cache للمكالمات المستقبلية
+          queryClient.setQueryData(['candidates'], transformedCandidates)
+          queryClient.setQueryData(['interviews'], transformedInterviews)
+          queryClient.setQueryData(['saved-candidates'], transformedSavedCandidates)
+          queryClient.setQueryData(['notifications'], transformedNotifications)
 
           // console.log('تم تحميل البيانات من Supabase بنجاح')
         } catch (error) {
@@ -1422,9 +1387,11 @@ export const useStore = create<AppState>()(
           isInitialized: true
         })
 
-        // تحميل البيانات من Supabase
-        await get().loadDataFromSupabase()
-        await get().loadUsersFromSupabase()
+        // تحميل البيانات من Supabase (متوازي)
+        await Promise.all([
+          get().loadDataFromSupabase(),
+          get().loadUsersFromSupabase()
+        ])
 
         // تحديث بيانات المستخدم الحالي من قائمة المستخدمين المحملة حديثاً من قاعدة البيانات لضمان تحديث الصلاحيات والحالة النشطة
         const currentRestoredUser = get().currentUser
@@ -2024,10 +1991,9 @@ export const useStore = create<AppState>()(
           .channel('candidates_changes')
           .on('postgres_changes', 
             { event: '*', schema: 'public', table: 'candidates' },
-            async (payload) => {
+            (payload) => {
               console.log('📊 تحديث في المرشحين:', payload.eventType)
-              // إعادة تحميل البيانات من Supabase
-              await get().loadDataFromSupabase()
+              queryClient.invalidateQueries({ queryKey: ['candidates'] })
             }
           )
           .subscribe()
@@ -2037,10 +2003,9 @@ export const useStore = create<AppState>()(
           .channel('saved_candidates_changes')
           .on('postgres_changes',
             { event: '*', schema: 'public', table: 'saved_candidates' },
-            async (payload) => {
+            (payload) => {
               console.log('💾 تحديث في المرشحين المحفوظين:', payload.eventType)
-              // إعادة تحميل البيانات من Supabase
-              await get().loadDataFromSupabase()
+              queryClient.invalidateQueries({ queryKey: ['saved-candidates'] })
             }
           )
           .subscribe()
@@ -2050,10 +2015,9 @@ export const useStore = create<AppState>()(
           .channel('interviews_changes')
           .on('postgres_changes',
             { event: '*', schema: 'public', table: 'interviews' },
-            async (payload) => {
+            (payload) => {
               console.log('📅 تحديث في المقابلات:', payload.eventType)
-              // إعادة تحميل البيانات من Supabase
-              await get().loadDataFromSupabase()
+              queryClient.invalidateQueries({ queryKey: ['interviews'] })
             }
           )
           .subscribe()
@@ -2063,10 +2027,9 @@ export const useStore = create<AppState>()(
           .channel('notifications_changes')
           .on('postgres_changes',
             { event: '*', schema: 'public', table: 'notifications' },
-            async (payload) => {
+            (payload) => {
               console.log('🔔 تحديث في الإشعارات:', payload.eventType)
-              // إعادة تحميل البيانات من Supabase
-              await get().loadDataFromSupabase()
+              queryClient.invalidateQueries({ queryKey: ['notifications'] })
             }
           )
           .subscribe()
@@ -2076,11 +2039,11 @@ export const useStore = create<AppState>()(
           .channel('users_changes')
           .on('postgres_changes',
             { event: '*', schema: 'public', table: 'users' },
-            async (payload) => {
+            (payload) => {
               console.log('👤 تحديث في المستخدمين:', payload.eventType)
-              await get().loadUsersFromSupabase()
-              
-              // تحديث جلسة المستخدم الحالي إذا تم تعديلها
+              queryClient.invalidateQueries({ queryKey: ['users'] })
+
+              // تحديث جلسة المستخدم الحالي إذا تم تعديلها مباشرة
               const { currentUser, users } = get()
               if (currentUser && payload.new && 'id' in payload.new && payload.new.id === currentUser.id) {
                 const updatedUser = users.find(u => u.id === currentUser.id)
@@ -2093,6 +2056,41 @@ export const useStore = create<AppState>()(
                     get().saveUserSession(updatedUser)
                   }
                 }
+              }
+            }
+          )
+          .subscribe()
+
+        // اشتراك في تحديثات سجلات الدخول
+        loginLogsSubscription = supabase
+          .channel('login_logs_changes')
+          .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'login_logs' },
+            (payload) => {
+              console.log('🔐 تحديث في سجلات الدخول:', payload.eventType)
+              queryClient.invalidateQueries({ queryKey: ['login-logs'] })
+              // تحديث مباشر للحالة المحلية
+              if (payload.eventType === 'INSERT' && payload.new) {
+                const newLog = payload.new as any
+                const transformed: LoginLog = {
+                  id: newLog.id, userId: newLog.user_id,
+                  userEmail: newLog.user_email, userName: newLog.user_name,
+                  loginTime: newLog.login_time, logoutTime: newLog.logout_time,
+                  ipAddress: newLog.ip_address, userAgent: newLog.user_agent,
+                  deviceType: newLog.device_type, browser: newLog.browser,
+                  os: newLog.os, country: newLog.country, city: newLog.city,
+                  latitude: newLog.latitude, longitude: newLog.longitude,
+                  isActive: newLog.is_active, sessionId: newLog.session_id,
+                  createdAt: newLog.created_at,
+                }
+                set(state => ({ loginLogs: [transformed, ...state.loginLogs] }))
+              } else if (payload.eventType === 'UPDATE' && payload.new) {
+                const updated = payload.new as any
+                set(state => ({
+                  loginLogs: state.loginLogs.map(log =>
+                    log.id === updated.id ? { ...log, isActive: updated.is_active, logoutTime: updated.logout_time } : log
+                  )
+                }))
               }
             }
           )
@@ -2130,69 +2128,81 @@ export const useStore = create<AppState>()(
           usersSubscription = null
         }
         
+        if (loginLogsSubscription) {
+          supabase.removeChannel(loginLogsSubscription)
+          loginLogsSubscription = null
+        }
+        
         // console.log('✅ تم تنظيف الاشتراكات')
       },
 
-      // دالة للحصول على معلومات الجهاز والموقع
-      getDeviceInfo: async () => {
-        try {
-          // الحصول على IP Address
-          const ipResponse = await fetch('https://api.ipify.org?format=json')
-          const ipData = await ipResponse.json()
-          const ipAddress = ipData.ip
+      // دالة للحصول على معلومات الجهاز والموقع (مع caching)
+      getDeviceInfo: (() => {
+        let cached: ReturnType<typeof getDeviceInfo> | null = null
+        return async function getDeviceInfo() {
+          if (cached) return cached
 
-          // الحصول على معلومات الموقع من IP
-          let locationData: any = {}
           try {
-            const locationResponse = await fetch(`https://ipapi.co/${ipAddress}/json/`)
-            locationData = await locationResponse.json()
-          } catch (e) {
-            console.log('فشل في الحصول على الموقع من ipapi.co')
-          }
+            const userAgent = navigator.userAgent
+            const deviceType = /Mobile|Android|iPhone|iPad/.test(userAgent) ? 'موبايل' : 'كمبيوتر'
+            
+            let browser = 'غير معروف'
+            if (userAgent.includes('Chrome')) browser = 'Chrome'
+            else if (userAgent.includes('Firefox')) browser = 'Firefox'
+            else if (userAgent.includes('Safari')) browser = 'Safari'
+            else if (userAgent.includes('Edge')) browser = 'Edge'
 
-          // تحليل User Agent
-          const userAgent = navigator.userAgent
-          const deviceType = /Mobile|Android|iPhone|iPad/.test(userAgent) ? 'موبايل' : 'كمبيوتر'
-          
-          let browser = 'غير معروف'
-          if (userAgent.includes('Chrome')) browser = 'Chrome'
-          else if (userAgent.includes('Firefox')) browser = 'Firefox'
-          else if (userAgent.includes('Safari')) browser = 'Safari'
-          else if (userAgent.includes('Edge')) browser = 'Edge'
+            let os = 'غير معروف'
+            if (userAgent.includes('Windows')) os = 'Windows'
+            else if (userAgent.includes('Mac')) os = 'macOS'
+            else if (userAgent.includes('Linux')) os = 'Linux'
+            else if (userAgent.includes('Android')) os = 'Android'
+            else if (userAgent.includes('iOS')) os = 'iOS'
 
-          let os = 'غير معروف'
-          if (userAgent.includes('Windows')) os = 'Windows'
-          else if (userAgent.includes('Mac')) os = 'macOS'
-          else if (userAgent.includes('Linux')) os = 'Linux'
-          else if (userAgent.includes('Android')) os = 'Android'
-          else if (userAgent.includes('iOS')) os = 'iOS'
+            // محاولة الحصول على IP والموقع (غير blocking)
+            let ipAddress = 'غير معروف'
+            let country = 'غير معروف'
+            let city = 'غير معروف'
+            let latitude: number | null = null
+            let longitude: number | null = null
+            
+            try {
+              const ipResponse = await fetch('https://api.ipify.org?format=json')
+              const ipData = await ipResponse.json()
+              ipAddress = ipData.ip
+              
+              try {
+                const locationResponse = await fetch(`https://ipapi.co/${ipAddress}/json/`)
+                const locationData = await locationResponse.json()
+                country = locationData.country_name || 'غير معروف'
+                city = locationData.city || 'غير معروف'
+                latitude = locationData.latitude || null
+                longitude = locationData.longitude || null
+              } catch (e) {
+                // فشل الحصول على الموقع - مش مشكلة
+              }
+            } catch (e) {
+              // فشل الحصول على IP - مش مشكلة
+            }
 
-          return {
-            ipAddress,
-            userAgent,
-            deviceType,
-            browser,
-            os,
-            country: locationData.country_name || 'غير معروف',
-            city: locationData.city || 'غير معروف',
-            latitude: locationData.latitude || null,
-            longitude: locationData.longitude || null
-          }
-        } catch (error) {
-          console.error('خطأ في الحصول على معلومات الجهاز:', error)
-          return {
-            ipAddress: 'غير معروف',
-            userAgent: navigator.userAgent,
-            deviceType: 'غير معروف',
-            browser: 'غير معروف',
-            os: 'غير معروف',
-            country: 'غير معروف',
-            city: 'غير معروف',
-            latitude: null,
-            longitude: null
+            cached = { ipAddress, userAgent, deviceType, browser, os, country, city, latitude, longitude }
+            return cached
+          } catch (error) {
+            console.error('خطأ في الحصول على معلومات الجهاز:', error)
+            return {
+              ipAddress: 'غير معروف',
+              userAgent: navigator.userAgent,
+              deviceType: 'غير معروف',
+              browser: 'غير معروف',
+              os: 'غير معروف',
+              country: 'غير معروف',
+              city: 'غير معروف',
+              latitude: null,
+              longitude: null
+            }
           }
         }
-      },
+      })(),
 
       // تسجيل الدخول في السجلات
       logLogin: async (userId, userEmail, userName) => {
@@ -2338,91 +2348,52 @@ export const useStore = create<AppState>()(
         }
       },
 
-      // الحصول على الجلسات النشطة
+      // الحصول على الجلسات النشطة (حسب حالة is_active في DB)
       getActiveSessions: () => {
         const { loginLogs } = get()
         return loginLogs.filter(log => log.isActive)
       },
 
-      // تحميل سجلات الأنشطة
-      loadAuditLogs: async () => {
-        const { currentUser } = get()
-        if (!currentUser || currentUser.userType !== 'admin') return
-
-        try {
-          const { data, error } = await supabase
-            .from('audit_logs')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(1000)
-
-          if (error) {
-            console.error('خطأ في تحميل سجلات الأنشطة:', error)
-            return
-          }
-
-          const transformedLogs: AuditLog[] = (data || []).map(log => ({
-            id: log.id,
-            userId: log.user_id,
-            userName: log.user_name,
-            actionType: log.action_type as AuditLog['actionType'],
-            targetType: log.target_type as AuditLog['targetType'],
-            targetName: log.target_name,
-            details: log.details,
-            createdAt: log.created_at
-          }))
-
-          set({ auditLogs: transformedLogs })
-        } catch (error) {
-          console.error('خطأ في تحميل سجلات الأنشطة:', error)
-        }
-      },
-
-      // تسجيل نشاط جديد
-      logAction: async (actionType, targetType, targetName, details) => {
-        const { currentUser } = get()
+      // إنهاء الجلسات القديمة (تُنادى عند فتح التطبيق وكل 5 دقايق)
+      expireStaleSessions: async () => {
+        const { loginLogs, currentUser } = get()
         if (!currentUser) return
+        const now = Date.now()
+        const timeout = 30 * 60 * 1000 // 30 دقيقة
+        const currentSessionId = localStorage.getItem('currentSessionId')
+        
+        const staleLogs = loginLogs.filter(log => {
+          if (!log.isActive) return false
+          // لا تنهي جلسة المستخدم الحالي
+          if (currentSessionId && log.sessionId === currentSessionId) return false
+          const loginTime = new Date(log.loginTime).getTime()
+          return now - loginTime > timeout
+        })
 
-        try {
-          const newLog = {
-            user_id: currentUser.id,
-            user_name: currentUser.name,
-            action_type: actionType,
-            target_type: targetType,
-            target_name: targetName,
-            details: details
-          }
+        if (staleLogs.length === 0) return
 
-          const { data, error } = await supabase
-            .from('audit_logs')
-            .insert([newLog])
-            .select()
-            .single()
+        // تحديث في Supabase للجلسات القديمة
+        const staleIds = staleLogs.map(log => log.id)
+        await supabase
+          .from('login_logs')
+          .update({ is_active: false, logout_time: new Date().toISOString() })
+          .in('id', staleIds)
 
-          if (error) {
-            console.error('خطأ في تسجيل النشاط:', error)
-            return
-          }
-
-          // تحديث الحالة المحلية فقط إذا تم التحميل مسبقاً
-          const transformedLog: AuditLog = {
-            id: data.id,
-            userId: data.user_id,
-            userName: data.user_name,
-            actionType: data.action_type as AuditLog['actionType'],
-            targetType: data.target_type as AuditLog['targetType'],
-            targetName: data.target_name,
-            details: data.details,
-            createdAt: data.created_at
-          }
-
-          set(state => ({
-            auditLogs: [transformedLog, ...state.auditLogs]
-          }))
-        } catch (error) {
-          console.error('خطأ في تسجيل النشاط:', error)
-        }
+        // تحديث الحالة المحلية
+        set(state => ({
+          loginLogs: state.loginLogs.map(log =>
+            staleIds.includes(log.id)
+              ? { ...log, isActive: false, logoutTime: new Date().toISOString() }
+              : log
+          )
+        }))
       },
+
+      // تحميل سجلات الأنشطة (معطل)
+      loadAuditLogs: async () => {},
+
+      // تسجيل نشاط جديد (معطل)
+      logAction: async () => {},
 
       // إضافة وظيفة set للوصول المباشر
       set: set

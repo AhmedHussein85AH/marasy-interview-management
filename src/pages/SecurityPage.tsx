@@ -6,35 +6,22 @@ import { useTranslation } from 'react-i18next'
 
 const SecurityPage: React.FC = () => {
   const { t } = useTranslation()
-  const { currentUser, loginLogs, loadLoginLogs, getActiveSessions, auditLogs, loadAuditLogs } = useStore()
-  const [activeTab, setActiveTab] = useState<'logins' | 'activities'>('logins')
+  const { currentUser, loginLogs, loadLoginLogs, getActiveSessions } = useStore()
   const [selectedLog, setSelectedLog] = useState<string | null>(null)
   const [filterEmail, setFilterEmail] = useState('')
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
-  const [auditFilter, setAuditFilter] = useState('')
 
   useEffect(() => {
     if (currentUser?.userType === 'admin') {
       loadLoginLogs()
-      loadAuditLogs()
     }
-  }, [currentUser, loadLoginLogs, loadAuditLogs])
+  }, [currentUser, loadLoginLogs])
 
   const activeSessions = getActiveSessions()
   const filteredLogs = loginLogs.filter(log => {
     if (filterEmail && !log.userEmail.toLowerCase().includes(filterEmail.toLowerCase())) return false
     if (filterActive === 'active' && !log.isActive) return false
     if (filterActive === 'inactive' && log.isActive) return false
-    return true
-  })
-
-  const filteredAuditLogs = auditLogs.filter(log => {
-    if (auditFilter) {
-      const q = auditFilter.toLowerCase()
-      return log.userName.toLowerCase().includes(q) || 
-             log.actionType.toLowerCase().includes(q) || 
-             log.targetName.toLowerCase().includes(q)
-    }
     return true
   })
 
@@ -67,201 +54,128 @@ const SecurityPage: React.FC = () => {
   return (
     <ProtectedLayout requiredPermissions={['admin']}>
       <div className="page-wrapper" style={{ direction: 'rtl' }}>
-
-
-        {/* Header */}
         <div className="page-header">
           <div>
             <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Shield size={22} /> {t('security.title', 'مراقبة الأمان والأنشطة')}
+              <Shield size={22} /> {t('security.title', 'سجلات الدخول')}
             </h1>
-            <p className="page-subtitle">{t('security.subtitle', 'تتبع تسجيلات الدخول وأنشطة المستخدمين')}</p>
+            <p className="page-subtitle">{t('security.subtitle', 'مراقبة تسجيلات الدخول والجلسات النشطة')}</p>
           </div>
+        </div>
 
-          {/* تبويبات */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
-            <button
-              onClick={() => setActiveTab('logins')}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: activeTab === 'logins' ? '#3498db' : 'transparent',
-                color: activeTab === 'logins' ? 'white' : '#7f8c8d',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontWeight: activeTab === 'logins' ? 'bold' : 'normal',
-                transition: 'all 0.2s'
-              }}
-            >
-              سجلات الدخول
-            </button>
-            <button
-              onClick={() => setActiveTab('activities')}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: activeTab === 'activities' ? '#3498db' : 'transparent',
-                color: activeTab === 'activities' ? 'white' : '#7f8c8d',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontWeight: activeTab === 'activities' ? 'bold' : 'normal',
-                transition: 'all 0.2s'
-              }}
-            >
-              سجلات الأنشطة
-            </button>
+        <div className="stats-mini" style={{ marginBottom: '20px' }}>
+          <div className="stats-mini-card">
+            <div className="value" style={{ color: '#2980b9' }}>{loginLogs.length}</div>
+            <div className="label">{t('security.totalLogins', 'إجمالي تسجيلات الدخول')}</div>
           </div>
-
-          {activeTab === 'logins' ? (
-            <>
-              {/* إحصائيات الدخول */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-            <div style={{ padding: '15px', backgroundColor: '#e8f4fd', borderRadius: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2980b9' }}>
-                {loginLogs.length}
-              </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.totalLogins', 'إجمالي تسجيلات الدخول')}</div>
-            </div>
-            <div style={{ padding: '15px', backgroundColor: '#d4edda', borderRadius: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
-                {activeSessions.length}
-              </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.activeSessions', 'جلسات نشطة')}</div>
-            </div>
-            <div style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f39c12' }}>
-                {new Set(loginLogs.map(log => log.userEmail)).size}
-              </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.activeUsers', 'مستخدمين نشطين')}</div>
-            </div>
-            <div style={{ padding: '15px', backgroundColor: '#f8d7da', borderRadius: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#e74c3c' }}>
-                {new Set(loginLogs.filter(log => log.country && log.country !== 'غير معروف').map(log => log.country)).size}
-              </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>{t('security.differentCountries', 'دول مختلفة')}</div>
-            </div>
+          <div className="stats-mini-card">
+            <div className="value" style={{ color: '#27ae60' }}>{activeSessions.length}</div>
+            <div className="label">{t('security.activeSessions', 'جلسات نشطة')}</div>
           </div>
-
-          {/* فلاتر */}
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder={t('security.searchByEmail', 'البحث بالبريد الإلكتروني...')}
-              value={filterEmail}
-              onChange={(e) => setFilterEmail(e.target.value)}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px',
-                flex: '1',
-                minWidth: '200px'
-              }}
-            />
-            <select
-              value={filterActive}
-              onChange={(e) => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}
-              title={t('security.status', 'الحالة')}
-              style={{
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '5px'
-              }}
-            >
-              <option value="all">{t('security.allSessions', 'جميع الجلسات')}</option>
-              <option value="active">{t('security.activeOnly', 'نشطة فقط')}</option>
-              <option value="inactive">{t('security.inactiveOnly', 'منتهية فقط')}</option>
-            </select>
+          <div className="stats-mini-card">
+            <div className="value" style={{ color: '#f39c12' }}>{new Set(activeSessions.map(log => log.userEmail)).size}</div>
+            <div className="label">{t('security.activeUsers', 'مستخدمين نشطين')}</div>
           </div>
+          <div className="stats-mini-card">
+            <div className="value" style={{ color: '#e74c3c' }}>{new Set(activeSessions.filter(log => log.country && log.country !== 'غير معروف').map(log => log.country)).size}</div>
+            <div className="label">{t('security.differentCountries', 'دول مختلفة')}</div>
+          </div>
+        </div>
 
-          {/* قائمة سجلات الدخول */}
-          <div style={{
-            maxHeight: '600px',
-            overflowY: 'auto',
-            border: '1px solid #ddd',
-            borderRadius: '5px',
-            direction: 'rtl'
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+        {activeSessions.length > 0 && (
+          <div style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {activeSessions.map(session => (
+              <div key={session.id} style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '10px 14px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, hsl(142 70% 92%), hsl(142 60% 85%))',
+                border: '1px solid hsl(142 50% 60%)',
+                minWidth: '200px',
+              }}>
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #27ae60, #2ecc71)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '13px', fontWeight: 700, color: 'white', flexShrink: 0,
+                }}>
+                  {session.userName.charAt(0)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: '#1a5c34' }}>{session.userName}</div>
+                  <div style={{ fontSize: '11px', color: '#2d7a4a' }}>{session.userEmail} · {session.deviceType || 'غير معروف'}</div>
+                </div>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#27ae60', flexShrink: 0 }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="filter-bar" style={{ marginBottom: '16px' }}>
+          <div className="search-box">
+            <Search size={14} />
+            <input className="form-input" style={{ width: '220px' }} type="text" placeholder={t('security.searchByEmail', 'البحث بالبريد الإلكتروني...')} value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} />
+          </div>
+          <select className="form-input" style={{ width: '180px' }} value={filterActive} onChange={(e) => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}>
+            <option value="all">{t('security.allSessions', 'جميع الجلسات')}</option>
+            <option value="active">{t('security.activeOnly', 'نشطة فقط')}</option>
+            <option value="inactive">{t('security.inactiveOnly', 'منتهية فقط')}</option>
+          </select>
+        </div>
+
+        <div className="section-card">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.user', 'المستخدم')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.device', 'الجهاز')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.location', 'الموقع')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.loginTime', 'وقت الدخول')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.duration', 'المدة')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.status', 'الحالة')}</th>
-                  <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>{t('security.details', 'تفاصيل')}</th>
+                  <th>{t('security.user', 'المستخدم')}</th>
+                  <th>{t('security.device', 'الجهاز')}</th>
+                  <th>{t('security.location', 'الموقع')}</th>
+                  <th>{t('security.loginTime', 'وقت الدخول')}</th>
+                  <th>{t('security.duration', 'المدة')}</th>
+                  <th>{t('security.status', 'الحالة')}</th>
+                  <th>{t('security.details', 'تفاصيل')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLogs.map((log) => (
-                  <tr
-                    key={log.id}
-                    style={{
-                      borderBottom: '1px solid #eee',
-                      backgroundColor: log.isActive ? '#e8f5e9' : 'white',
-                      cursor: 'pointer'
-                    }}
+                  <tr key={log.id}
+                    style={{ backgroundColor: log.isActive ? 'hsl(120 40% 95%)' : 'transparent', cursor: 'pointer' }}
                     onClick={() => setSelectedLog(selectedLog === log.id ? null : log.id)}
                   >
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        {log.userName}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#7f8c8d' }}>{log.userEmail}</div>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>{log.userName}</div>
+                      <div className="muted" style={{ fontSize: '12px' }}>{log.userEmail}</div>
                     </td>
-                    <td style={{ padding: '12px' }}>
+                    <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         {getDeviceIcon(log.deviceType)}
                         <span>{log.deviceType || t('security.unknown', 'غير معروف')}</span>
                       </div>
-                      <div style={{ fontSize: '12px', color: '#7f8c8d' }}>
-                        {log.browser} - {log.os}
-                      </div>
+                      <div className="muted" style={{ fontSize: '12px' }}>{log.browser} - {log.os}</div>
                     </td>
-                    <td style={{ padding: '12px' }}>
+                    <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <Globe className="h-4 w-4" />
+                        <Globe size={14} />
                         <span>{log.city || t('security.unknown', 'غير معروف')}, {log.country || t('security.unknown', 'غير معروف')}</span>
                       </div>
                       {log.latitude && log.longitude && (
-                        <div style={{ fontSize: '12px', color: '#7f8c8d' }}>
-                          {log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}
-                        </div>
+                        <div className="muted" style={{ fontSize: '12px' }}>{log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}</div>
                       )}
                     </td>
-                    <td style={{ padding: '12px' }}>
+                    <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <Clock className="h-4 w-4" />
+                        <Clock size={14} />
                         <span>{formatDate(log.loginTime)}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '12px' }}>
-                      {getDuration(log.loginTime, log.logoutTime)}
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <span style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        backgroundColor: log.isActive ? '#d4edda' : '#f8d7da',
-                        color: log.isActive ? '#155724' : '#721c24'
-                      }}>
+                    <td>{getDuration(log.loginTime, log.logoutTime)}</td>
+                    <td>
+                      <span className={log.isActive ? 'badge badge-success' : 'badge badge-muted'}>
                         {log.isActive ? t('security.active', 'نشط') : t('security.ended', 'منتهي')}
                       </span>
                     </td>
-                    <td style={{ padding: '12px' }}>
-                      <button
-                        style={{
-                          padding: '5px 10px',
-                          backgroundColor: '#3498db',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
+                    <td>
+                      <button className="btn btn-primary btn-sm">
                         {t('security.viewDetails', 'عرض التفاصيل')}
                       </button>
                     </td>
@@ -270,385 +184,48 @@ const SecurityPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          {filteredLogs.length === 0 && (
+            <div className="empty-state">
+              <AlertTriangle size={32} style={{ opacity: 0.5 }} />
+              <p>{t('security.noLogs', 'لا توجد سجلات دخول')}</p>
+            </div>
+          )}
+        </div>
 
-          {/* تفاصيل السجل المحدد */}
-          {selectedLog && (
-            <div style={{
-              marginTop: '20px',
-              padding: '20px',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '8px',
-              border: '2px solid #3498db'
-            }}>
+        {selectedLog && (
+          <div className="section-card" style={{ marginTop: '16px', border: '2px solid hsl(210 90% 55%)' }}>
+            <div className="section-card-header">
+              <h3>{t('security.sessionDetails', 'تفاصيل الجلسة')}</h3>
+            </div>
+            <div className="section-card-body">
               {(() => {
                 const log = loginLogs.find(l => l.id === selectedLog)
                 if (!log) return null
                 return (
-                  <div>
-                    <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>{t('security.sessionDetails', 'تفاصيل الجلسة')}</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-                      <div>
-                        <strong>{t('security.user')}:</strong> {log.userName} ({log.userEmail})
-                      </div>
-                      <div>
-                        <strong>{t('security.ipAddress')}:</strong> {log.ipAddress || t('security.unknown')}
-                      </div>
-                      <div>
-                        <strong>{t('security.device')}:</strong> {log.deviceType || t('security.unknown')}
-                      </div>
-                      <div>
-                        <strong>{t('security.browser')}:</strong> {log.browser || t('security.unknown')}
-                      </div>
-                      <div>
-                        <strong>{t('security.os')}:</strong> {log.os || t('security.unknown')}
-                      </div>
-                      <div>
-                        <strong>{t('security.country')}:</strong> {log.country || t('security.unknown')}
-                      </div>
-                      <div>
-                        <strong>{t('security.city')}:</strong> {log.city || t('security.unknown')}
-                      </div>
-                      <div>
-                        <strong>{t('security.loginTime')}:</strong> {formatDate(log.loginTime)}
-                      </div>
-                      {log.logoutTime && (
-                        <div>
-                          <strong>{t('security.logoutTime')}:</strong> {formatDate(log.logoutTime)}
-                        </div>
-                      )}
-                      <div>
-                        <strong>{t('security.duration')}:</strong> {getDuration(log.loginTime, log.logoutTime)}
-                      </div>
-                      <div>
-                        <strong>{t('security.sessionId')}:</strong> <code style={{ fontSize: '12px' }}>{log.sessionId}</code>
-                      </div>
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <strong>{t('security.userAgent')}:</strong>
-                        <div style={{
-                          padding: '10px',
-                          backgroundColor: 'white',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          fontFamily: 'monospace',
-                          wordBreak: 'break-all',
-                          marginTop: '5px'
-                        }}>
-                          {log.userAgent || t('security.unknown')}
-                        </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '14px' }}>
+                    <div><strong>{t('security.user')}:</strong> {log.userName} ({log.userEmail})</div>
+                    <div><strong>{t('security.ipAddress')}:</strong> {log.ipAddress || t('security.unknown')}</div>
+                    <div><strong>{t('security.device')}:</strong> {log.deviceType || t('security.unknown')}</div>
+                    <div><strong>{t('security.browser')}:</strong> {log.browser || t('security.unknown')}</div>
+                    <div><strong>{t('security.os')}:</strong> {log.os || t('security.unknown')}</div>
+                    <div><strong>{t('security.country')}:</strong> {log.country || t('security.unknown')}</div>
+                    <div><strong>{t('security.city')}:</strong> {log.city || t('security.unknown')}</div>
+                    <div><strong>{t('security.loginTime')}:</strong> {formatDate(log.loginTime)}</div>
+                    {log.logoutTime && <div><strong>{t('security.logoutTime')}:</strong> {formatDate(log.logoutTime)}</div>}
+                    <div><strong>{t('security.duration')}:</strong> {getDuration(log.loginTime, log.logoutTime)}</div>
+                    <div><strong>{t('security.sessionId')}:</strong> <code style={{ fontSize: '12px' }}>{log.sessionId}</code></div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <strong>{t('security.userAgent')}:</strong>
+                      <div style={{ padding: '10px', background: 'hsl(var(--muted))', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all', marginTop: '5px' }}>
+                        {log.userAgent || t('security.unknown')}
                       </div>
                     </div>
                   </div>
                 )
               })()}
             </div>
-          )}
-
-          {filteredLogs.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#7f8c8d' }}>
-              <AlertTriangle className="h-12 w-12" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
-              <p>{t('security.noLogs', 'لا توجد سجلات دخول')}</p>
-            </div>
-          )}
-          </>
-          ) : (
-            <>
-              {/* فلاتر سجلات الأنشطة */}
-              <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                <input
-                  type="text"
-                  placeholder="البحث باسم المستخدم أو الإجراء..."
-                  value={auditFilter}
-                  onChange={(e) => setAuditFilter(e.target.value)}
-                  style={{
-                    padding: '10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '5px',
-                    flex: '1',
-                    minWidth: '200px'
-                  }}
-                />
-              </div>
-
-              {/* جدول سجلات الأنشطة */}
-              <div style={{
-                maxHeight: '600px',
-                overflowY: 'auto',
-                border: '1px solid #ddd',
-                borderRadius: '5px',
-                direction: 'rtl'
-              }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
-                    <tr>
-                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المستخدم</th>
-                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الإجراء</th>
-                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الهدف</th>
-                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الاسم / التفاصيل</th>
-                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الوقت</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAuditLogs.map((log) => (
-                      <tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '12px', fontWeight: 'bold' }}>{log.userName}</td>
-                        <td style={{ padding: '12px' }}>
-                          <span style={{
-                            padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
-                            backgroundColor: 
-                              log.actionType === 'إضافة' ? '#d4edda' :
-                              log.actionType === 'تعديل' ? '#fff3cd' :
-                              log.actionType === 'قبول' ? '#d1ecf1' :
-                              log.actionType === 'رفض' || log.actionType === 'حذف' || log.actionType === 'استبعاد' ? '#f8d7da' : '#e2e3e5',
-                            color:
-                              log.actionType === 'إضافة' ? '#155724' :
-                              log.actionType === 'تعديل' ? '#856404' :
-                              log.actionType === 'قبول' ? '#0c5460' :
-                              log.actionType === 'رفض' || log.actionType === 'حذف' || log.actionType === 'استبعاد' ? '#721c24' : '#383d41'
-                          }}>
-                            {log.actionType}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px', color: '#7f8c8d' }}>{log.targetType}</td>
-                        <td style={{ padding: '12px' }}>
-                          <div style={{ fontWeight: 'bold' }}>{log.targetName}</div>
-                          <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '4px' }}>{log.details}</div>
-                        </td>
-                        <td style={{ padding: '12px', color: '#7f8c8d', fontSize: '14px' }}>
-                          {formatDate(log.createdAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {filteredAuditLogs.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#7f8c8d' }}>
-                  <AlertTriangle className="h-12 w-12" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
-                  <p>لا توجد سجلات أنشطة حالياً</p>
-                </div>
-              )}
-            </>
-          )}
-
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-          <button
-            className={`btn ${activeTab === 'logins' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveTab('logins')}
-          >
-            سجلات الدخول
-          </button>
-          <button
-            className={`btn ${activeTab === 'activities' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setActiveTab('activities')}
-          >
-            سجلات الأنشطة
-          </button>
-        </div>
-
-        {activeTab === 'logins' ? (
-          <>
-            {/* Stats */}
-            <div className="stats-mini" style={{ marginBottom: '20px' }}>
-              <div className="stats-mini-card">
-                <div className="value" style={{ color: '#2980b9' }}>{loginLogs.length}</div>
-                <div className="label">{t('security.totalLogins', 'إجمالي تسجيلات الدخول')}</div>
-              </div>
-              <div className="stats-mini-card">
-                <div className="value" style={{ color: '#27ae60' }}>{activeSessions.length}</div>
-                <div className="label">{t('security.activeSessions', 'جلسات نشطة')}</div>
-              </div>
-              <div className="stats-mini-card">
-                <div className="value" style={{ color: '#f39c12' }}>{new Set(loginLogs.map(log => log.userEmail)).size}</div>
-                <div className="label">{t('security.activeUsers', 'مستخدمين نشطين')}</div>
-              </div>
-              <div className="stats-mini-card">
-                <div className="value" style={{ color: '#e74c3c' }}>{new Set(loginLogs.filter(log => log.country && log.country !== 'غير معروف').map(log => log.country)).size}</div>
-                <div className="label">{t('security.differentCountries', 'دول مختلفة')}</div>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="filter-bar" style={{ marginBottom: '16px' }}>
-              <div className="search-box">
-                <Search size={14} />
-                <input className="form-input" style={{ width: '220px' }} type="text" placeholder={t('security.searchByEmail', 'البحث بالبريد الإلكتروني...')} value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} />
-              </div>
-              <select className="form-input" style={{ width: '180px' }} value={filterActive} onChange={(e) => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}>
-                <option value="all">{t('security.allSessions', 'جميع الجلسات')}</option>
-                <option value="active">{t('security.activeOnly', 'نشطة فقط')}</option>
-                <option value="inactive">{t('security.inactiveOnly', 'منتهية فقط')}</option>
-              </select>
-            </div>
-
-            {/* Login logs table */}
-            <div className="section-card">
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>{t('security.user', 'المستخدم')}</th>
-                      <th>{t('security.device', 'الجهاز')}</th>
-                      <th>{t('security.location', 'الموقع')}</th>
-                      <th>{t('security.loginTime', 'وقت الدخول')}</th>
-                      <th>{t('security.duration', 'المدة')}</th>
-                      <th>{t('security.status', 'الحالة')}</th>
-                      <th>{t('security.details', 'تفاصيل')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLogs.map((log) => (
-                      <tr key={log.id}
-                        style={{ backgroundColor: log.isActive ? 'hsl(120 40% 95%)' : 'transparent', cursor: 'pointer' }}
-                        onClick={() => setSelectedLog(selectedLog === log.id ? null : log.id)}
-                      >
-                        <td>
-                          <div style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>{log.userName}</div>
-                          <div className="muted" style={{ fontSize: '12px' }}>{log.userEmail}</div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {getDeviceIcon(log.deviceType)}
-                            <span>{log.deviceType || t('security.unknown', 'غير معروف')}</span>
-                          </div>
-                          <div className="muted" style={{ fontSize: '12px' }}>{log.browser} - {log.os}</div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <Globe size={14} />
-                            <span>{log.city || t('security.unknown', 'غير معروف')}, {log.country || t('security.unknown', 'غير معروف')}</span>
-                          </div>
-                          {log.latitude && log.longitude && (
-                            <div className="muted" style={{ fontSize: '12px' }}>{log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}</div>
-                          )}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <Clock size={14} />
-                            <span>{formatDate(log.loginTime)}</span>
-                          </div>
-                        </td>
-                        <td>{getDuration(log.loginTime, log.logoutTime)}</td>
-                        <td>
-                          <span className={log.isActive ? 'badge badge-success' : 'badge badge-muted'}>
-                            {log.isActive ? t('security.active', 'نشط') : t('security.ended', 'منتهي')}
-                          </span>
-                        </td>
-                        <td>
-                          <button className="btn btn-primary btn-sm">
-                            {t('security.viewDetails', 'عرض التفاصيل')}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {filteredLogs.length === 0 && (
-                <div className="empty-state">
-                  <AlertTriangle size={32} style={{ opacity: 0.5 }} />
-                  <p>{t('security.noLogs', 'لا توجد سجلات دخول')}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Session details */}
-            {selectedLog && (
-              <div className="section-card" style={{ marginTop: '16px', border: '2px solid hsl(210 90% 55%)' }}>
-                <div className="section-card-header">
-                  <h3>{t('security.sessionDetails', 'تفاصيل الجلسة')}</h3>
-                </div>
-                <div className="section-card-body">
-                  {(() => {
-                    const log = loginLogs.find(l => l.id === selectedLog)
-                    if (!log) return null
-                    return (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '14px' }}>
-                        <div><strong>{t('security.user')}:</strong> {log.userName} ({log.userEmail})</div>
-                        <div><strong>{t('security.ipAddress')}:</strong> {log.ipAddress || t('security.unknown')}</div>
-                        <div><strong>{t('security.device')}:</strong> {log.deviceType || t('security.unknown')}</div>
-                        <div><strong>{t('security.browser')}:</strong> {log.browser || t('security.unknown')}</div>
-                        <div><strong>{t('security.os')}:</strong> {log.os || t('security.unknown')}</div>
-                        <div><strong>{t('security.country')}:</strong> {log.country || t('security.unknown')}</div>
-                        <div><strong>{t('security.city')}:</strong> {log.city || t('security.unknown')}</div>
-                        <div><strong>{t('security.loginTime')}:</strong> {formatDate(log.loginTime)}</div>
-                        {log.logoutTime && <div><strong>{t('security.logoutTime')}:</strong> {formatDate(log.logoutTime)}</div>}
-                        <div><strong>{t('security.duration')}:</strong> {getDuration(log.loginTime, log.logoutTime)}</div>
-                        <div><strong>{t('security.sessionId')}:</strong> <code style={{ fontSize: '12px' }}>{log.sessionId}</code></div>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <strong>{t('security.userAgent')}:</strong>
-                          <div style={{ padding: '10px', background: 'hsl(var(--muted))', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all', marginTop: '5px' }}>
-                            {log.userAgent || t('security.unknown')}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {/* Audit log filter */}
-            <div className="filter-bar" style={{ marginBottom: '16px' }}>
-              <div className="search-box">
-                <Search size={14} />
-                <input className="form-input" style={{ width: '300px' }} type="text" placeholder="البحث باسم المستخدم أو الإجراء..." value={auditFilter} onChange={(e) => setAuditFilter(e.target.value)} />
-              </div>
-            </div>
-
-            {/* Audit log table */}
-            <div className="section-card">
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>المستخدم</th>
-                      <th>الإجراء</th>
-                      <th>الهدف</th>
-                      <th>الاسم / التفاصيل</th>
-                      <th>الوقت</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAuditLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td style={{ fontWeight: 600 }}>{log.userName}</td>
-                        <td>
-                          <span className={
-                            log.actionType === 'إضافة' ? 'badge badge-success' :
-                            log.actionType === 'تعديل' ? 'badge badge-warning' :
-                            log.actionType === 'قبول' ? 'badge badge-info' :
-                            log.actionType === 'رفض' || log.actionType === 'حذف' || log.actionType === 'استبعاد' ? 'badge badge-danger' : 'badge badge-muted'
-                          }>
-                            {log.actionType}
-                          </span>
-                        </td>
-                        <td className="muted">{log.targetType}</td>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{log.targetName}</div>
-                          <div className="muted" style={{ fontSize: '12px', marginTop: '2px' }}>{log.details}</div>
-                        </td>
-                        <td className="muted" style={{ fontSize: '13px' }}>{formatDate(log.createdAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {filteredAuditLogs.length === 0 && (
-                <div className="empty-state">
-                  <AlertTriangle size={32} style={{ opacity: 0.5 }} />
-                  <p>لا توجد سجلات أنشطة حالياً</p>
-                </div>
-              )}
-            </div>
-          </>
+          </div>
         )}
-
       </div>
     </ProtectedLayout>
   )

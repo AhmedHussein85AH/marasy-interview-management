@@ -12,11 +12,6 @@ const LoginPage: React.FC = () => {
   const { login, users, initializeDemoData, loginWithSupabase } = useStore()
 
   useEffect(() => {
-    // التأكد من تهيئة البيانات عند تحميل الصفحة
-    if (users.length === 0) {
-      initializeDemoData()
-    }
-
     // تحميل البيانات المحفوظة عند تحميل الصفحة
     const savedEmail = localStorage.getItem('rememberedEmail')
     const savedPassword = localStorage.getItem('rememberedPassword')

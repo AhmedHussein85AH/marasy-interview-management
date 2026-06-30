@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { useTheme } from '../context/ThemeContext'
@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Users, BarChart3,
   Database, Upload, UserCog, Settings, ShieldCheck,
   LogOut, ChevronLeft, PanelRightClose, PanelRightOpen,
-  Sun, Moon, Globe, User
+  Sun, Moon, Globe, User, MessageCircle, Mail
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -46,10 +46,70 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (window.confirm(t('layout.logoutConfirm', 'هل أنت متأكد من تسجيل الخروج؟'))) logout()
   }
 
+  // إنهاء الجلسات القديمة عند فتح التطبيق وكل 5 دقايق
+  useEffect(() => {
+    const { currentUser: user, expireStaleSessions } = useStore.getState()
+    if (!user) return
+    expireStaleSessions()
+    const interval = setInterval(() => {
+      useStore.getState().expireStaleSessions()
+    }, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   const userName = currentUser?.name?.split(' - ')[0] ?? ''
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', direction: i18n.language === 'en' ? 'ltr' : 'rtl' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+
+      {/* ===== Support Bar ===== */}
+      <div style={{
+        background: 'linear-gradient(135deg, #075e54 0%, #128c7e 50%, #0a7e6b 100%)',
+        padding: '8px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
+        direction: 'rtl',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 999,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '28px', height: '28px',
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <MessageCircle size={14} color="white" />
+          </div>
+          <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>دعم فني</span>
+          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>Twins Development</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <a href="https://wa.me/201552962516" target="_blank" rel="noopener noreferrer" title="واتساب"
+            style={{ color: 'white', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(255,255,255,0.12)', transition: 'background 0.2s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(37,211,102,0.35)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}>
+            <MessageCircle size={18} style={{ color: '#25D366' }} />
+          </a>
+          <a href="mailto:AhmedHusseinElsayed@outlook.com" title="إيميل"
+            style={{ color: 'white', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(255,255,255,0.12)', transition: 'background 0.2s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(241,196,15,0.3)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}>
+            <Mail size={18} style={{ color: '#f1c40f' }} />
+          </a>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flex: 1, direction: i18n.language === 'en' ? 'ltr' : 'rtl' }}>
 
       {/* ===== Sidebar ===== */}
       <aside style={{
@@ -295,6 +355,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <Footer />
       </main>
 
+      </div>{/* نهاية الحاوية الداخلية (sidebar + main) */}
     </div>
   )
 }
