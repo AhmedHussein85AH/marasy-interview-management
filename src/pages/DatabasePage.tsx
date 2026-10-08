@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { supabase } from '../integrations/supabase/client'
-import { Bell, Download, Trash2, AlertTriangle, Search, UserMinus, LogOut as Resign } from 'lucide-react'
+import { Bell, Download, Trash2, AlertTriangle, Search, UserMinus, LogOut as Resign, QrCode } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { GOVERNORATES } from '../constants/lists'
 import { useEditableLists } from '../hooks/useEditableLists'
 import MultiSelect from '../components/MultiSelect'
 import { usePermissions } from '../hooks/usePermissions'
+import QRCardScannerModal from '../components/QRCardScannerModal'
 
 const DatabasePage: React.FC = () => {
   const { 
@@ -35,6 +36,7 @@ const DatabasePage: React.FC = () => {
   const [filterGovernorate, setFilterGovernorate] = useState<string[]>([])
   const [filteredCandidates, setFilteredCandidates] = useState(savedCandidates)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showQRScanner, setShowQRScanner] = useState(false)
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([])
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showExclusionModal, setShowExclusionModal] = useState(false)
@@ -101,7 +103,7 @@ const DatabasePage: React.FC = () => {
     () => Array.from(new Set(savedCandidates.map(c => c.securityCompany))).filter(Boolean),
     [savedCandidates]
   )
-  const { allPositions } = useEditableLists()
+  const { allPositions, allGovernorates } = useEditableLists()
 
   // وظائف التعامل مع الاختيار
   const handleSelectCandidate = (id: string) => {
@@ -386,6 +388,23 @@ const DatabasePage: React.FC = () => {
               )}
               {t('database.notifications')}
             </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{
+                background: 'linear-gradient(135deg, hsl(262 72% 45%), hsl(280 70% 50%))',
+                color: 'white',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 700,
+                boxShadow: '0 2px 8px rgba(139,92,246,0.3)',
+                cursor: 'pointer',
+              }}
+              onClick={() => setShowQRScanner(true)}
+            >
+              <QrCode size={15} /> فحص كارت QR
+            </button>
             <button className="btn btn-success btn-sm" onClick={exportToExcel}>
               <Download size={14} /> {t('database.exportExcel')}
             </button>
@@ -460,7 +479,7 @@ const DatabasePage: React.FC = () => {
           <MultiSelect options={['مقبول','مرفوض','مستبعد','استقالة']} selectedValues={filterResult} onChange={setFilterResult} placeholder={t('database.columns.finalResult')} />
           <MultiSelect options={uniqueCompanies} selectedValues={filterCompany} onChange={setFilterCompany} placeholder={t('database.columns.company')} />
           <MultiSelect options={allPositions} selectedValues={filterPosition} onChange={setFilterPosition} placeholder={t('database.columns.position')} />
-          <MultiSelect options={GOVERNORATES} selectedValues={filterGovernorate} onChange={setFilterGovernorate} placeholder={t('database.columns.governorate')} />
+          <MultiSelect options={allGovernorates} selectedValues={filterGovernorate} onChange={setFilterGovernorate} placeholder={t('database.columns.governorate')} />
         </div>
 
         {/* ── Selection bar ── */}
@@ -650,6 +669,15 @@ const DatabasePage: React.FC = () => {
           </div>
         )}
 
+        {/* ── QR Scanner Modal ── */}
+        {showQRScanner && (
+          <QRCardScannerModal
+            onClose={() => setShowQRScanner(false)}
+            onSelectCandidate={(c) => {
+              setSearchQuery(c.nationalId || c.name)
+            }}
+          />
+        )}
       </div>
     </ProtectedLayout>
   )

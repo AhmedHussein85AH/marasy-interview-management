@@ -5,8 +5,10 @@ import { useTheme } from '../context/ThemeContext'
 import { useTranslation } from 'react-i18next'
 import { usePermissions } from '../hooks/usePermissions'
 import Footer from './Footer'
+import MarassiAIAssistant from './MarassiAIAssistant'
+import InstallPWAPrompt from './InstallPWAPrompt'
 import {
-  LayoutDashboard, Users, BarChart3,
+  LayoutDashboard, Users, Calendar, BarChart3,
   Database, Upload, UserCog, Settings, ShieldCheck,
   LogOut, ChevronLeft, PanelRightClose, PanelRightOpen,
   Sun, Moon, Globe, User, MessageCircle, Mail
@@ -15,6 +17,7 @@ import {
 const NAV_ITEMS = [
   { path: '/dashboard',   labelKey: 'dashboard',     icon: LayoutDashboard, permissionKey: null },
   { path: '/candidates',  labelKey: 'candidates',    icon: Users,           permissionKey: 'canViewCandidates' },
+  { path: '/interviews',  labelKey: 'interviews',    icon: Calendar,        permissionKey: 'canViewCandidates' },
   { path: '/analytics',   labelKey: 'analytics',     icon: BarChart3,       permissionKey: 'canViewAnalytics' },
   { path: '/database',    labelKey: 'database',      icon: Database,        permissionKey: 'canViewDatabase' },
   { path: '/bulk-upload', labelKey: 'bulkUpload',    icon: Upload,          permissionKey: 'canBulkUpload' },
@@ -64,7 +67,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* ===== Support Bar ===== */}
       <div style={{
-        background: 'linear-gradient(135deg, #075e54 0%, #128c7e 50%, #0a7e6b 100%)',
+        background: 'linear-gradient(135deg, #3d1a78 0%, #6C3FC5 50%, #8B5CF6 100%)',
         padding: '8px 20px',
         display: 'flex',
         alignItems: 'center',
@@ -72,7 +75,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         flexWrap: 'wrap',
         gap: '8px',
         direction: 'rtl',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+        boxShadow: '0 2px 16px rgba(108,63,197,0.3)',
         position: 'sticky',
         top: 0,
         zIndex: 999,
@@ -80,30 +83,31 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
             width: '28px', height: '28px',
-            background: 'rgba(255,255,255,0.2)',
+            background: 'rgba(255,255,255,0.15)',
             borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '1px solid rgba(255,255,255,0.25)',
           }}>
             <MessageCircle size={14} color="white" />
           </div>
-          <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>دعم فني</span>
-          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>Twins Development</span>
+          <span style={{ color: 'white', fontWeight: 700, fontSize: '14px', letterSpacing: '0.02em' }}>دعم فني</span>
+          <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px' }}>Twins Development</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <a href="https://wa.me/201552962516" target="_blank" rel="noopener noreferrer" title="واتساب"
             style={{ color: 'white', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', borderRadius: '8px',
-              background: 'rgba(255,255,255,0.12)', transition: 'background 0.2s' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(37,211,102,0.35)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}>
+              background: 'rgba(255,255,255,0.1)', transition: 'background 0.2s, transform 0.15s' }}
+            onMouseEnter={e => { (e.currentTarget.style.background = 'rgba(37,211,102,0.35)'); (e.currentTarget.style.transform = 'scale(1.1)') }}
+            onMouseLeave={e => { (e.currentTarget.style.background = 'rgba(255,255,255,0.1)'); (e.currentTarget.style.transform = 'scale(1)') }}>
             <MessageCircle size={18} style={{ color: '#25D366' }} />
           </a>
           <a href="mailto:AhmedHusseinElsayed@outlook.com" title="إيميل"
             style={{ color: 'white', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', borderRadius: '8px',
-              background: 'rgba(255,255,255,0.12)', transition: 'background 0.2s' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(241,196,15,0.3)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}>
+              background: 'rgba(255,255,255,0.1)', transition: 'background 0.2s, transform 0.15s' }}
+            onMouseEnter={e => { (e.currentTarget.style.background = 'rgba(241,196,15,0.3)'); (e.currentTarget.style.transform = 'scale(1.1)') }}
+            onMouseLeave={e => { (e.currentTarget.style.background = 'rgba(255,255,255,0.1)'); (e.currentTarget.style.transform = 'scale(1)') }}>
             <Mail size={18} style={{ color: '#f1c40f' }} />
           </a>
         </div>
@@ -115,7 +119,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <aside style={{
         width: collapsed ? '56px' : '256px',
         minWidth: collapsed ? '56px' : '256px',
-        background: 'hsl(222 47% 13%)',
+        background: 'hsl(258 42% 12%)',
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
@@ -126,6 +130,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         flexShrink: 0,
         zIndex: 10,
         alignSelf: 'flex-start',
+        borderRight: i18n.language === 'en' ? '1px solid rgba(139,92,246,0.12)' : 'none',
+        borderLeft: i18n.language === 'ar' ? '1px solid rgba(139,92,246,0.12)' : 'none',
       }}>
 
         {/* Logo + toggle */}
@@ -142,18 +148,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
                 <div style={{
                   width: '34px', height: '34px', flexShrink: 0,
-                  background: 'linear-gradient(135deg, hsl(217 91% 48%), hsl(262 83% 58%))',
+                  background: 'linear-gradient(135deg, hsl(262 72% 45%), hsl(280 70% 55%))',
                   borderRadius: '9px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px hsl(217 91% 48% / 0.4)'
+                  boxShadow: '0 4px 16px hsl(262 72% 45% / 0.45)',
+                  fontSize: '15px', fontWeight: 800, color: 'white', letterSpacing: '-1px',
                 }}>
-                  <ShieldCheck size={17} color="white" />
+                  V
                 </div>
                 <div style={{ overflow: 'hidden' }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
                     {t('nav.systemName')}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'hsl(215 25% 55%)', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '11px', color: 'hsl(258 20% 60%)', whiteSpace: 'nowrap' }}>
                     {t('nav.systemDesc')}
                   </div>
                 </div>
@@ -163,11 +170,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {collapsed && (
               <div style={{
                 width: '34px', height: '34px',
-                background: 'linear-gradient(135deg, hsl(217 91% 48%), hsl(262 83% 58%))',
+                background: 'linear-gradient(135deg, hsl(262 72% 45%), hsl(280 70% 55%))',
                 borderRadius: '9px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 16px hsl(262 72% 45% / 0.4)',
+                fontSize: '15px', fontWeight: 800, color: 'white', letterSpacing: '-1px',
               }}>
-                <ShieldCheck size={17} color="white" />
+                V
               </div>
             )}
 
@@ -210,10 +219,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               >
                 <div style={{
                   width: '26px', height: '26px', flexShrink: 0,
-                  background: 'linear-gradient(135deg, hsl(217 91% 55%), hsl(262 83% 65%))',
+                  background: 'linear-gradient(135deg, hsl(262 72% 52%), hsl(280 70% 62%))',
                   borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '11px', fontWeight: 700, color: 'white',
+                  boxShadow: '0 2px 8px hsl(262 72% 52% / 0.4)',
                 }}>
                   {userName.charAt(0)}
                 </div>
@@ -246,19 +256,21 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   gap: '10px',
                   padding: collapsed ? '10px' : '10px 12px',
                   borderRadius: '8px',
-                  color: isActive ? 'white' : 'hsl(215 25% 65%)',
+                  color: isActive ? 'white' : 'hsl(258 20% 68%)',
                   textDecoration: 'none',
                   fontSize: '13.5px',
                   fontWeight: isActive ? 600 : 500,
-                  background: isActive ? 'hsl(217 91% 48%)' : 'transparent',
+                  background: isActive
+                    ? 'linear-gradient(135deg, hsl(262 72% 50%), hsl(280 68% 58%))'
+                    : 'transparent',
                   marginBottom: '2px',
                   transition: 'background 0.15s, color 0.15s',
                   justifyContent: collapsed ? 'center' : undefined,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                 }}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'hsl(222 47% 18%)'; (e.currentTarget as HTMLElement).style.color = 'white' }}
-                onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'hsl(215 25% 65%)' } }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'hsl(258 42% 18%)'; (e.currentTarget as HTMLElement).style.color = 'white' }}
+                onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'hsl(258 20% 68%)' } }}
               >
                 <Icon size={16} style={{ flexShrink: 0 }} />
                 {!collapsed && (
@@ -350,8 +362,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </aside>
 
       {/* ===== Main content ===== */}
-      <main style={{ flex: 1, background: 'hsl(210 20% 98%)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <main style={{ flex: 1, background: 'hsl(250 15% 97%)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <InstallPWAPrompt />
         {children}
+        <MarassiAIAssistant />
         <Footer />
       </main>
 

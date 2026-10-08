@@ -276,6 +276,54 @@ const AnalyticsPage: React.FC = () => {
           })}
         </div>
 
+        {/* ── Recruitment Funnel & Executive Visuals ── */}
+        <div className="section-card" style={{ marginBottom: '24px', background: 'linear-gradient(135deg, hsl(260 30% 98%), #fff)', border: '1px solid hsl(262 50% 90%)' }}>
+          <div className="section-card-header" style={{ borderBottom: '1px solid hsl(262 40% 92%)' }}>
+            <h3 style={{ color: '#4c1d95', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🎯 مسار تصفية المرشحين والقرارات النهائية
+            </h3>
+          </div>
+          <div className="section-card-body" style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              
+              {/* Funnel Stage 1 */}
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>1. إجمالي اللي قدموا</div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#2563eb', margin: '4px 0' }}>{total}</div>
+                <div style={{ height: '6px', background: '#dbeafe', borderRadius: '10px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '100%', background: '#2563eb' }}></div>
+                </div>
+              </div>
+
+              {/* Funnel Stage 2 */}
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>2. في الانتظار والمقابلة</div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#d97706', margin: '4px 0' }}>{pending}</div>
+                <div style={{ height: '6px', background: '#fef3c7', borderRadius: '10px', overflow: 'hidden' }}>
+                  <div style={{ width: `${total > 0 ? (pending / total) * 100 : 0}%`, height: '100%', background: '#d97706' }}></div>
+                </div>
+              </div>
+
+              {/* Funnel Stage 3 */}
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>3. المقبولين والجاهزين للعمل</div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', margin: '4px 0' }}>{hired}</div>
+                <div style={{ height: '6px', background: '#dcfce7', borderRadius: '10px', overflow: 'hidden' }}>
+                  <div style={{ width: `${total > 0 ? (hired / total) * 100 : 0}%`, height: '100%', background: '#16a34a' }}></div>
+                </div>
+              </div>
+
+              {/* Funnel Conversion Rate */}
+              <div style={{ background: 'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)', color: '#fff', borderRadius: '12px', padding: '16px', boxShadow: '0 4px 14px rgba(109, 40, 217, 0.3)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, opacity: 0.9, textTransform: 'uppercase' }}>نسبة القبول والتعيين الكلية</div>
+                <div style={{ fontSize: '26px', fontWeight: 900, margin: '4px 0' }}>{successPct}%</div>
+                <div style={{ fontSize: '11px', opacity: 0.9 }}>نسبة المقبولين من إجمالي المتقدمين</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
         {/* ── Row 1: Pie + Companies bar ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '16px', marginBottom: '16px' }}>
 

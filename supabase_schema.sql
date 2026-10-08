@@ -1,10 +1,16 @@
--- =============================================
--- Marasy Interview Management System
--- Supabase Schema - Latest Version
--- =============================================
+-- ==============================================================================
+-- Marassi - Internal Security Management System (نظام إدارة الأمن الداخلي)
+-- Supabase Schema - Complete & Production Ready
+-- قم بنسخ هذا الكود بالكامل وتشغيله في Supabase SQL Editor
+-- ==============================================================================
 
--- جدول المستخدمين
-CREATE TABLE IF NOT EXISTS users (
+-- 1. تفعيل الامتدادات الضرورية
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ==============================================================================
+-- 2. جدول المستخدمين (users)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
@@ -15,8 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول المرشحين
-CREATE TABLE IF NOT EXISTS candidates (
+-- ==============================================================================
+-- 3. جدول المرشحين (candidates)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.candidates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   national_id TEXT UNIQUE NOT NULL,
@@ -35,12 +43,17 @@ CREATE TABLE IF NOT EXISTS candidates (
   work_shift TEXT CHECK (work_shift IN ('نهار', 'ليل')),
   is_rejected_before BOOLEAN DEFAULT FALSE,
   previous_rejection_date DATE,
+  photo_base64 TEXT,
+  cv_base64 TEXT,
+  cv_file_name TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول المرشحين المحفوظين (القرارات النهائية)
-CREATE TABLE IF NOT EXISTS saved_candidates (
+-- ==============================================================================
+-- 4. جدول المرشحين المحفوظين / قاعدة البيانات المستدامة (saved_candidates)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.saved_candidates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   national_id TEXT NOT NULL,
@@ -61,23 +74,47 @@ CREATE TABLE IF NOT EXISTS saved_candidates (
   resignation_reason TEXT,
   is_rejected_before BOOLEAN DEFAULT FALSE,
   previous_rejection_date DATE,
+  photo_base64 TEXT,
+  cv_base64 TEXT,
+  cv_file_name TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول الإشعارات
-CREATE TABLE IF NOT EXISTS notifications (
+-- ==============================================================================
+-- 5. جدول المقابلات الشخصية (interviews)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.interviews (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  candidate_id TEXT,
+  candidate_name TEXT NOT NULL,
+  position TEXT NOT NULL,
+  date DATE NOT NULL,
+  time TEXT NOT NULL,
+  status TEXT DEFAULT 'مجدولة' CHECK (status IN ('مجدولة', 'مكتملة', 'ملغاة')),
+  notes TEXT,
+  interviewer TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 6. جدول الإشعارات (notifications)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   type TEXT NOT NULL CHECK (type IN ('rejected_before', 'new_candidate', 'decision_made')),
   title TEXT NOT NULL,
   message TEXT NOT NULL,
-  candidate_id UUID,
+  candidate_id TEXT,
   candidate_name TEXT NOT NULL,
   is_read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- جدول سجلات تسجيل الدخول
-CREATE TABLE IF NOT EXISTS login_logs (
+-- ==============================================================================
+-- 7. جدول سجلات تسجيل الدخول والأمان (login_logs)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.login_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id TEXT NOT NULL,
   user_email TEXT NOT NULL,
@@ -98,38 +135,101 @@ CREATE TABLE IF NOT EXISTS login_logs (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- =============================================
--- الفهارس
--- =============================================
-CREATE INDEX IF NOT EXISTS idx_candidates_national_id ON candidates(national_id);
-CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status);
-CREATE INDEX IF NOT EXISTS idx_candidates_offer_result ON candidates(offer_result);
-CREATE INDEX IF NOT EXISTS idx_saved_candidates_national_id ON saved_candidates(national_id);
-CREATE INDEX IF NOT EXISTS idx_saved_candidates_final_result ON saved_candidates(final_result);
-CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX IF NOT EXISTS idx_login_logs_user_email ON login_logs(user_email);
-CREATE INDEX IF NOT EXISTS idx_login_logs_is_active ON login_logs(is_active);
+-- ==============================================================================
+-- 8. الفهارس لتحسين سرعة الاستعلام والبحث (Indexes)
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS idx_candidates_national_id ON public.candidates(national_id);
+CREATE INDEX IF NOT EXISTS idx_candidates_status ON public.candidates(status);
+CREATE INDEX IF NOT EXISTS idx_candidates_offer_result ON public.candidates(offer_result);
+CREATE INDEX IF NOT EXISTS idx_candidates_security_company ON public.candidates(security_company);
 
--- =============================================
--- Row Level Security
--- =============================================
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE saved_candidates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE login_logs ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_saved_candidates_national_id ON public.saved_candidates(national_id);
+CREATE INDEX IF NOT EXISTS idx_saved_candidates_final_result ON public.saved_candidates(final_result);
+CREATE INDEX IF NOT EXISTS idx_saved_candidates_security_company ON public.saved_candidates(security_company);
 
-CREATE POLICY "Allow all" ON users FOR ALL USING (true);
-CREATE POLICY "Allow all" ON candidates FOR ALL USING (true);
-CREATE POLICY "Allow all" ON saved_candidates FOR ALL USING (true);
-CREATE POLICY "Allow all" ON notifications FOR ALL USING (true);
-CREATE POLICY "Allow all" ON login_logs FOR ALL USING (true);
+CREATE INDEX IF NOT EXISTS idx_interviews_date ON public.interviews(date);
+CREATE INDEX IF NOT EXISTS idx_interviews_status ON public.interviews(status);
 
--- =============================================
--- المستخدمون الأساسيون
--- =============================================
-INSERT INTO users (name, email, user_type, department, is_active) VALUES
-('أحمد حسين - الأدمن',          'admin@company.com',     'admin',             'إدارة أمن اعمار مراسي', true),
-('مدير الأمن - مسئول مقابلات', 'interview@company.com', 'interview_manager', 'إدارة أمن اعمار مراسي', true),
-('أدمن شركة الأمن - موظف',     'security@company.com',  'security_employee', 'إدارة أمن اعمار مراسي', true)
-ON CONFLICT (email) DO NOTHING;
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
+
+CREATE INDEX IF NOT EXISTS idx_login_logs_user_email ON public.login_logs(user_email);
+CREATE INDEX IF NOT EXISTS idx_login_logs_is_active ON public.login_logs(is_active);
+CREATE INDEX IF NOT EXISTS idx_login_logs_session_id ON public.login_logs(session_id);
+
+-- ==============================================================================
+-- 9. أمان الصفوف (Row Level Security - RLS)
+-- ==============================================================================
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.interviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.login_logs ENABLE ROW LEVEL SECURITY;
+
+-- سياسات الوصول الشامل (تسمح بالعمل المباشر للتطبيق)
+DROP POLICY IF EXISTS "Allow all users access" ON public.users;
+CREATE POLICY "Allow all users access" ON public.users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all candidates access" ON public.candidates;
+CREATE POLICY "Allow all candidates access" ON public.candidates FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all saved_candidates access" ON public.saved_candidates;
+CREATE POLICY "Allow all saved_candidates access" ON public.saved_candidates FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all interviews access" ON public.interviews;
+CREATE POLICY "Allow all interviews access" ON public.interviews FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all notifications access" ON public.notifications;
+CREATE POLICY "Allow all notifications access" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all login_logs access" ON public.login_logs;
+CREATE POLICY "Allow all login_logs access" ON public.login_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- 10. تفعيل التزامن الفوري (Supabase Realtime)
+-- ==============================================================================
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.candidates;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.saved_candidates;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.interviews;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.login_logs;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+END $$;
+
+-- ==============================================================================
+-- 11. بيانات المستخدمين التجريبية / الافتراضية الأولية
+-- ==============================================================================
+INSERT INTO public.users (name, email, user_type, department, is_active) VALUES
+('أحمد حسين - الأدمن',          'admin@company.com',     'admin',             'إدارة الأمن الداخلي', true),
+('مدير الأمن - مسئول مقابلات', 'interview@company.com', 'interview_manager', 'إدارة الأمن الداخلي', true),
+('أدمن شركة الأمن - موظف',     'security@company.com',  'security_employee', 'إدارة الأمن الداخلي', true)
+ON CONFLICT (email) DO UPDATE SET
+  name = EXCLUDED.name,
+  user_type = EXCLUDED.user_type,
+  department = EXCLUDED.department,
+  is_active = EXCLUDED.is_active;

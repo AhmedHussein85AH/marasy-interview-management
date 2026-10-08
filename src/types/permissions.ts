@@ -1,141 +1,243 @@
-// ── كل الصلاحيات المتاحة في النظام ──────────────────────
+// ══════════════════════════════════════════════════════════════
+//  User Permissions – مصفوفة الصلاحيات الشاملة والدقيقة للنظام
+// ══════════════════════════════════════════════════════════════
+
 export interface UserPermissions {
-  // المرشحون
-  canViewCandidates: boolean
-  canAddCandidates: boolean
-  canEditCandidates: boolean
-  canDeleteCandidates: boolean
-  canApproveCandidates: boolean   // قبول / رفض
-  canBulkEditCandidates: boolean  // تعديل جماعي
+  // ── المرشحون والملفات ──
+  canViewCandidates: boolean          // عرض قائمة المرشحين
+  canAddCandidates: boolean           // إضافة مرشح جديد
+  canEditCandidates: boolean          // تعديل بيانات المرشح
+  canDeleteCandidates: boolean        // حذف مرشح
+  canApproveCandidates: boolean       // اتخاذ قرار المقابلة (قبول / رفض / استبعاد)
+  canBulkEditCandidates: boolean      // التعديل الجماعي للمرشحين
+  canUploadPhotos: boolean            // رفع وتعديل الصور الشخصية
+  canUploadCV: boolean                // رفع وتنزيل السير الذاتية
+  canPrintCards: boolean              // طباعة ومشاركة كروت الهوية الرقمية
+  canScanQR: boolean                  // استخدام ماسح كروت الـ QR بالكاميرا
+  canExportCandidatesExcel: boolean   // تصدير كشوفات المرشحين Excel
 
-  // المقابلات
-  canManageInterviews: boolean
+  // ── المقابلات والمواعيد ──
+  canManageInterviews: boolean        // إدارة ومتابعة جدول المقابلات
+  canScheduleInterviews: boolean      // جدولة المقابلات وتعيين اللجان
 
-  // قاعدة البيانات
-  canViewDatabase: boolean
-  canDeleteFromDatabase: boolean
-  canExcludeFromDatabase: boolean // استبعاد / استقالة
+  // ── قاعدة البيانات والأرشيف ──
+  canViewDatabase: boolean            // عرض الأرشيف وقاعدة البيانات المعتمدة
+  canDeleteFromDatabase: boolean      // حذف سجلات من قاعدة البيانات
+  canExcludeFromDatabase: boolean     // تسجيل استبعاد / استقالة موظف
+  canRemoveDuplicates: boolean        // إزالة وتنظيف السجلات المكررة
+  canExportDatabase: boolean          // تصدير بيانات الأرشيف Excel
 
-  // التقارير
-  canViewAnalytics: boolean
-  canExportReports: boolean
+  // ── الرفع الجماعي ──
+  canBulkUpload: boolean              // رفع وتحديث شيتات Excel الجماعية
+  canBulkUploadPhotos: boolean        // الرفع الجماعي لمجلدات الصور
+  canExportData: boolean              // تصدير واستخراج النسخ الاحتياطية
 
-  // رفع الملفات
-  canBulkUpload: boolean
-  canExportData: boolean
+  // ── التقارير والذكاء الاصطناعي ──
+  canViewAnalytics: boolean           // عرض الإحصائيات ولوحة التحليلات
+  canExportReports: boolean           // تصدير وطباعة التقارير الإحصائية
+  canUseAIAssistant: boolean          // استخدام المساعد الذكي Marassi AI
 
-  // المستخدمون
-  canManageUsers: boolean
-
-  // الإعدادات
-  canAccessSettings: boolean
-
-  // مراقبة الأمان
-  canViewSecurity: boolean
+  // ── الإدارة والأمان ──
+  canManageUsers: boolean             // إنشاء وتعديل المستخدمين
+  canAccessSettings: boolean          // الوصول للإعدادات وتخصيص القوائم
+  canViewSecurity: boolean            // مراقبة سجلات الدخول والأمان (Audit Logs)
 }
 
-// ── الصلاحيات الافتراضية لكل role ───────────────────────
+// ── الصلاحيات الافتراضية لكل دور (Role Defaults) ───────────────────────
 export const DEFAULT_PERMISSIONS: Record<string, UserPermissions> = {
   admin: {
+    // المرشحون
     canViewCandidates: true,
     canAddCandidates: true,
     canEditCandidates: true,
     canDeleteCandidates: true,
     canApproveCandidates: true,
     canBulkEditCandidates: true,
+    canUploadPhotos: true,
+    canUploadCV: true,
+    canPrintCards: true,
+    canScanQR: true,
+    canExportCandidatesExcel: true,
+    // المقابلات
     canManageInterviews: true,
+    canScheduleInterviews: true,
+    // قاعدة البيانات
     canViewDatabase: true,
     canDeleteFromDatabase: true,
     canExcludeFromDatabase: true,
+    canRemoveDuplicates: true,
+    canExportDatabase: true,
+    // الرفع والبيانات
+    canBulkUpload: true,
+    canBulkUploadPhotos: true,
+    canExportData: true,
+    // التقارير والـ AI
     canViewAnalytics: true,
     canExportReports: true,
-    canBulkUpload: true,
-    canExportData: true,
+    canUseAIAssistant: true,
+    // الإدارة
     canManageUsers: true,
     canAccessSettings: true,
     canViewSecurity: true,
   },
+
   interview_manager: {
+    // المرشحون
     canViewCandidates: true,
     canAddCandidates: false,
     canEditCandidates: false,
     canDeleteCandidates: false,
     canApproveCandidates: true,
     canBulkEditCandidates: false,
+    canUploadPhotos: true,
+    canUploadCV: true,
+    canPrintCards: true,
+    canScanQR: true,
+    canExportCandidatesExcel: true,
+    // المقابلات
     canManageInterviews: true,
+    canScheduleInterviews: true,
+    // قاعدة البيانات
     canViewDatabase: true,
     canDeleteFromDatabase: false,
     canExcludeFromDatabase: true,
+    canRemoveDuplicates: false,
+    canExportDatabase: true,
+    // الرفع والبيانات
+    canBulkUpload: false,
+    canBulkUploadPhotos: false,
+    canExportData: true,
+    // التقارير والـ AI
     canViewAnalytics: true,
     canExportReports: true,
-    canBulkUpload: false,
-    canExportData: true,
+    canUseAIAssistant: true,
+    // الإدارة
     canManageUsers: false,
     canAccessSettings: false,
     canViewSecurity: false,
   },
+
   security_employee: {
+    // المرشحون
     canViewCandidates: true,
     canAddCandidates: true,
     canEditCandidates: true,
     canDeleteCandidates: false,
     canApproveCandidates: false,
     canBulkEditCandidates: true,
+    canUploadPhotos: true,
+    canUploadCV: true,
+    canPrintCards: true,
+    canScanQR: true,
+    canExportCandidatesExcel: false,
+    // المقابلات
     canManageInterviews: false,
+    canScheduleInterviews: false,
+    // قاعدة البيانات
     canViewDatabase: true,
     canDeleteFromDatabase: false,
     canExcludeFromDatabase: false,
+    canRemoveDuplicates: false,
+    canExportDatabase: false,
+    // الرفع والبيانات
+    canBulkUpload: true,
+    canBulkUploadPhotos: true,
+    canExportData: false,
+    // التقارير والـ AI
     canViewAnalytics: true,
     canExportReports: false,
-    canBulkUpload: true,
-    canExportData: false,
+    canUseAIAssistant: true,
+    // الإدارة
     canManageUsers: false,
     canAccessSettings: false,
     canViewSecurity: false,
   },
 }
 
-// ── أسماء الصلاحيات بالعربي ──────────────────────────────
+// ── المسميات العربية الدقيقة لكل صلاحية ──────────────────────────────
 export const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
-  canViewCandidates:     'عرض المرشحين',
-  canAddCandidates:      'إضافة مرشحين',
-  canEditCandidates:     'تعديل بيانات المرشحين',
-  canDeleteCandidates:   'حذف المرشحين',
-  canApproveCandidates:  'قبول / رفض المرشحين',
-  canBulkEditCandidates: 'تعديل جماعي للمرشحين',
-  canManageInterviews:   'إدارة المقابلات',
-  canViewDatabase:       'عرض قاعدة البيانات',
-  canDeleteFromDatabase: 'حذف من قاعدة البيانات',
-  canExcludeFromDatabase:'استبعاد / استقالة من قاعدة البيانات',
-  canViewAnalytics:      'عرض التقارير والإحصائيات',
-  canExportReports:      'تصدير التقارير',
-  canBulkUpload:         'رفع ملفات Excel / JSON',
-  canExportData:         'تصدير البيانات',
-  canManageUsers:        'إدارة المستخدمين',
-  canAccessSettings:     'الوصول للإعدادات',
-  canViewSecurity:       'مراقبة الأمان',
+  // المرشحون
+  canViewCandidates:        'عرض قائمة المرشحين',
+  canAddCandidates:         'إضافة مرشحين جدد',
+  canEditCandidates:        'تعديل بيانات المرشحين',
+  canDeleteCandidates:      'حذف مرشحين',
+  canApproveCandidates:     'اتخاذ قرار المقابلة (قبول / رفض / استبعاد)',
+  canBulkEditCandidates:    'التعديل الجماعي للمرشحين',
+  canUploadPhotos:          'رفع وتعديل الصور الشخصية',
+  canUploadCV:              'رفع وتنزيل السير الذاتية (CV)',
+  canPrintCards:            'طباعة ومشاركة كروت الهوية الرقمية',
+  canScanQR:                'فحص وسكان كروت الـ QR بالكاميرا',
+  canExportCandidatesExcel: 'تصدير كشوف المرشحين Excel',
+
+  // المقابلات
+  canManageInterviews:      'إدارة ومتابعة المقابلات',
+  canScheduleInterviews:    'جدولة المقابلات وتعيين اللجان',
+
+  // قاعدة البيانات
+  canViewDatabase:          'عرض قاعدة البيانات والأرشيف',
+  canDeleteFromDatabase:    'حذف سجلات من قاعدة البيانات',
+  canExcludeFromDatabase:   'تسجيل استبعاد أو استقالة موظف',
+  canRemoveDuplicates:      'إزالة وتنظيف السجلات المكررة',
+  canExportDatabase:        'تصدير بيانات الأرشيف Excel',
+
+  // الرفع والبيانات
+  canBulkUpload:            'رفع وتحديث شيتات Excel',
+  canBulkUploadPhotos:      'الرفع الجماعي لمجلدات الصور',
+  canExportData:            'تصدير واستخراج النسخ الاحتياطية',
+
+  // التقارير والـ AI
+  canViewAnalytics:         'عرض الإحصائيات ولوحة التحليلات',
+  canExportReports:         'تصدير وطباعة التقارير الإحصائية',
+  canUseAIAssistant:        'استخدام المساعد الذكي Marassi AI',
+
+  // الإدارة
+  canManageUsers:           'إدارة المستخدمين وحسابات الدخول',
+  canAccessSettings:        'الوصول للإعدادات وتخصيص القوائم',
+  canViewSecurity:          'مراقبة سجلات الأمان والنشاطات (Audit Logs)',
 }
 
-// ── تجميع الصلاحيات في مجموعات ───────────────────────────
+// ── تجميع الصلاحيات في مجموعات منظمة ───────────────────────────
 export const PERMISSION_GROUPS: { label: string; keys: (keyof UserPermissions)[] }[] = [
   {
-    label: 'المرشحون',
-    keys: ['canViewCandidates','canAddCandidates','canEditCandidates','canDeleteCandidates','canApproveCandidates','canBulkEditCandidates'],
+    label: '📋 إدارة المرشحين والملفات',
+    keys: [
+      'canViewCandidates',
+      'canAddCandidates',
+      'canEditCandidates',
+      'canDeleteCandidates',
+      'canApproveCandidates',
+      'canBulkEditCandidates',
+      'canUploadPhotos',
+      'canUploadCV',
+      'canPrintCards',
+      'canScanQR',
+      'canExportCandidatesExcel',
+    ],
   },
   {
-    label: 'المقابلات',
-    keys: ['canManageInterviews'],
+    label: '📅 المقابلات والجدولة',
+    keys: ['canManageInterviews', 'canScheduleInterviews'],
   },
   {
-    label: 'قاعدة البيانات',
-    keys: ['canViewDatabase','canDeleteFromDatabase','canExcludeFromDatabase'],
+    label: '🗄️ قاعدة البيانات والأرشيف',
+    keys: [
+      'canViewDatabase',
+      'canDeleteFromDatabase',
+      'canExcludeFromDatabase',
+      'canRemoveDuplicates',
+      'canExportDatabase',
+    ],
   },
   {
-    label: 'التقارير والبيانات',
-    keys: ['canViewAnalytics','canExportReports','canBulkUpload','canExportData'],
+    label: '📤 الرفع الجماعي والنسخ الاحتياطي',
+    keys: ['canBulkUpload', 'canBulkUploadPhotos', 'canExportData'],
   },
   {
-    label: 'الإدارة',
-    keys: ['canManageUsers','canAccessSettings','canViewSecurity'],
+    label: '📊 التقارير والذكاء الاصطناعي',
+    keys: ['canViewAnalytics', 'canExportReports', 'canUseAIAssistant'],
+  },
+  {
+    label: '🛡️ الإدارة والأمان والرقابة',
+    keys: ['canManageUsers', 'canAccessSettings', 'canViewSecurity'],
   },
 ]

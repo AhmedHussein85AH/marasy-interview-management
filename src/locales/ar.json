@@ -1,8 +1,8 @@
 {
   "translation": {
     "footer": {
-      "rights": "جميع الحقوق محفوظة اللواء/ماجد يوسف - شركة توينز لتطوير الويب",
-      "support": "واتس دعم فني +201552119251 | ايميل AhmedHusseinElsayed@outlook.com"
+      "rights": "جميع الحقوق محفوظة  - شركة توينز لتطوير الويب",
+      "support": "واتس دعم فني +201552962516 | ايميل AhmedHusseinElsayed@outlook.com"
     },
     "general": {
       "print": "طباعة / PDF",
@@ -11,6 +11,7 @@
     "nav": {
       "dashboard": "لوحة التحكم",
       "candidates": "المرشحون",
+      "interviews": "المقابلات والمواعيد",
       "analytics": "التقارير",
       "database": "قاعدة البيانات",
       "bulkUpload": "رفع ملفات Excel",
@@ -18,7 +19,7 @@
       "usersDesc": "إدارة أعضاء الفريق وأدوارهم",
       "settings": "الإعدادات",
       "security": "مراقبة الأمان",
-      "systemName": "نظام مراسي",
+      "systemName": "Vettro",
       "systemDesc": "إدارة المقابلات"
     },
     "candidates": {

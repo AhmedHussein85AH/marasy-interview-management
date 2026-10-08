@@ -3,129 +3,40 @@ import { supabase } from '../integrations/supabase/client'
 import { Database } from '../integrations/supabase/types'
 import type { UserPermissions } from '../types/permissions'
 import { queryClient } from '../lib/queryClient'
+import {
+  transformCandidate,
+  transformSavedCandidate,
+  transformLoginLog,
+  transformNotification,
+  transformInterview,
+} from './types'
 
+// Re-export all types for backward compatibility
+export type {
+  UserType,
+  User,
+  Candidate,
+  SavedCandidate,
+  Notification,
+  LoginLog,
+  Interview,
+  DashboardStats,
+} from './types'
+
+// Re-import types for local use
+import type {
+  UserType,
+  User,
+  Candidate,
+  SavedCandidate,
+  Notification,
+  LoginLog,
+  Interview,
+  DashboardStats,
+} from './types'
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type Tables = Database['public']['Tables']
-
-// أنواع المستخدمين
-export type UserType = 'security_employee' | 'interview_manager' | 'admin'
-
-// واجهة المستخدم
-export interface User {
-  id: string
-  name: string
-  email: string
-  userType: UserType
-  department: string
-  createdAt: string
-  isActive?: boolean
-  permissions?: UserPermissions
-}
-
-// واجهة المرشح
-export interface Candidate {
-  id: string
-  name: string
-  nationalId: string
-  birthDate: string
-  governorate: string
-  qualification: string
-  maritalStatus: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
-  securityCompany: string
-  position?: string
-  phone?: string
-  offerDate: string
-  offerResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار'
-  status: 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض'
-  createdBy: string
-  notes?: string
-  workShift?: 'نهار' | 'ليل'
-  createdAt: string
-  updatedAt: string
-  isRejectedBefore?: boolean
-  previousRejectionDate?: string
-}
-
-// واجهة قاعدة البيانات المحفوظة
-export interface SavedCandidate {
-  id: string
-  name: string
-  nationalId: string
-  birthDate: string
-  governorate: string
-  qualification: string
-  maritalStatus: 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل'
-  securityCompany: string
-  position?: string
-  offerDate: string
-  finalResult: 'مقبول' | 'مرفوض' | 'مستبعد' | 'استقالة'
-  decisionDate: string
-  decisionBy: string
-  notes?: string
-  workShift?: 'نهار' | 'ليل'
-  exclusionReason?: string
-  resignationReason?: string
-  isRejectedBefore: boolean
-  previousRejectionDate?: string
-  createdAt: string
-}
-
-// واجهة الإشعارات
-export interface Notification {
-  id: string
-  type: 'rejected_before' | 'new_candidate' | 'decision_made'
-  title: string
-  message: string
-  candidateId: string
-  candidateName: string
-  isRead: boolean
-  createdAt: string
-}
-
-// واجهة سجل تسجيل الدخول
-export interface LoginLog {
-  id: string
-  userId: string
-  userEmail: string
-  userName: string
-  loginTime: string
-  logoutTime?: string
-  ipAddress?: string
-  userAgent?: string
-  deviceType?: string
-  browser?: string
-  os?: string
-  country?: string
-  city?: string
-  latitude?: number
-  longitude?: number
-  isActive: boolean
-  sessionId?: string
-  createdAt: string
-}
-
-// واجهة المقابلة
-export interface Interview {
-  id: string
-  candidateId: string
-  candidateName: string
-  position: string
-  date: string
-  time: string
-  status: 'مجدولة' | 'مكتملة' | 'ملغاة'
-  notes: string
-  interviewer: string
-  createdAt: string
-  updatedAt: string
-}
-
-// إحصائيات لوحة التحكم
-export interface DashboardStats {
-  totalCandidates: number
-  pendingInterviews: number
-  completedInterviews: number
-  hiredCandidates: number
-  rejectedCandidates: number
-}
 
 // حالة التطبيق
 export interface AppState {
@@ -202,8 +113,10 @@ export interface AppState {
   logLogout: (sessionId: string) => Promise<void>
   loadLoginLogs: () => Promise<void>
   getActiveSessions: () => LoginLog[]
-
-  }
+  expireStaleSessions: () => Promise<void>
+  loadAuditLogs: () => Promise<void>
+  logAction: (action: string, details?: any) => Promise<void>
+}
 
 // متغيرات لتخزين الاشتراكات
 let candidatesSubscription: any = null
@@ -413,7 +326,10 @@ export const useStore = create<AppState>()(
             created_by: currentUser.name,
             notes: candidateData.notes || null,
             is_rejected_before: !!rejectedBefore,
-            previous_rejection_date: rejectedBefore?.decisionDate || null
+            previous_rejection_date: rejectedBefore?.decisionDate || null,
+            photo_base64: candidateData.photoBase64 || null,
+            cv_base64: candidateData.cvBase64 || null,
+            cv_file_name: candidateData.cvFileName || null
           }
 
           console.log('إضافة مرشح جديد:', newCandidate.name)
@@ -456,27 +372,7 @@ export const useStore = create<AppState>()(
           await supabase.from('notifications').insert(notificationsToInsert)
 
           // تحويل البيانات من snake_case إلى camelCase
-          const transformedCandidate: Candidate = {
-            id: data.id,
-            name: data.name,
-            nationalId: data.national_id,
-            birthDate: data.birth_date,
-            governorate: data.governorate,
-            qualification: data.qualification,
-            maritalStatus: data.marital_status,
-            securityCompany: data.security_company,
-            position: data.position,
-            phone: data.phone,
-            offerDate: data.offer_date,
-            offerResult: data.offer_result,
-            status: data.status,
-            createdBy: data.created_by,
-            notes: data.notes,
-            isRejectedBefore: data.is_rejected_before,
-            previousRejectionDate: data.previous_rejection_date,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-          }
+          const transformedCandidate: Candidate = transformCandidate(data)
 
           // تحديث الحالة المحلية
           set(state => ({
@@ -518,8 +414,11 @@ export const useStore = create<AppState>()(
           if (data.position       !== undefined) updateData.position         = data.position || null
           if (data.phone          !== undefined) updateData.phone            = data.phone || null
           if (data.offerDate      !== undefined) updateData.offer_date       = data.offerDate || null
-          if ((data as any).workShift !== undefined) updateData.work_shift   = (data as any).workShift || null
-          if ((data as any).notes     !== undefined) updateData.notes        = (data as any).notes || null
+          if ((data as any).workShift   !== undefined) updateData.work_shift    = (data as any).workShift   || null
+          if ((data as any).notes       !== undefined) updateData.notes         = (data as any).notes       || null
+          if ((data as any).photoBase64 !== undefined) updateData.photo_base64  = (data as any).photoBase64 || null
+          if ((data as any).cvBase64    !== undefined) updateData.cv_base64     = (data as any).cvBase64    || null
+          if ((data as any).cvFileName  !== undefined) updateData.cv_file_name  = (data as any).cvFileName  || null
 
           const { error } = await supabase.from('candidates').update(updateData).eq('id', id)
           if (error) throw error
@@ -824,28 +723,7 @@ export const useStore = create<AppState>()(
             }
 
             // تحديث الحالة المحلية - تحويل من snake_case إلى camelCase
-            const transformedData: SavedCandidate = {
-              id: data.id,
-              name: data.name,
-              nationalId: data.national_id,
-              birthDate: data.birth_date,
-              governorate: data.governorate,
-              qualification: data.qualification,
-              maritalStatus: data.marital_status,
-              securityCompany: data.security_company,
-              position: data.position,
-              offerDate: data.offer_date,
-              finalResult: data.final_result,
-              decisionDate: data.decision_date,
-              decisionBy: data.decision_by,
-              notes: data.notes,
-              workShift: data.work_shift,
-              exclusionReason: data.exclusion_reason,
-              resignationReason: data.resignation_reason,
-              isRejectedBefore: data.is_rejected_before,
-              previousRejectionDate: data.previous_rejection_date,
-              createdAt: data.created_at
-            }
+            const transformedData: SavedCandidate = transformSavedCandidate(data)
             
             set(state => ({
               savedCandidates: state.savedCandidates.some(s => s.id === transformedData.id)
@@ -892,28 +770,7 @@ export const useStore = create<AppState>()(
             }
 
             // تحديث الحالة المحلية - تحويل من snake_case إلى camelCase
-            const transformedData: SavedCandidate = {
-              id: data.id,
-              name: data.name,
-              nationalId: data.national_id,
-              birthDate: data.birth_date,
-              governorate: data.governorate,
-              qualification: data.qualification,
-              maritalStatus: data.marital_status,
-              securityCompany: data.security_company,
-              position: data.position,
-              offerDate: data.offer_date,
-              finalResult: data.final_result,
-              decisionDate: data.decision_date,
-              decisionBy: data.decision_by,
-              notes: data.notes,
-              workShift: data.work_shift,
-              exclusionReason: data.exclusion_reason,
-              resignationReason: data.resignation_reason,
-              isRejectedBefore: data.is_rejected_before,
-              previousRejectionDate: data.previous_rejection_date,
-              createdAt: data.created_at
-            }
+            const transformedData: SavedCandidate = transformSavedCandidate(data)
             
             set(state => ({
               savedCandidates: [...state.savedCandidates, transformedData]
@@ -1204,76 +1061,14 @@ export const useStore = create<AppState>()(
           }
 
           // تحويل البيانات من snake_case إلى camelCase للواجهة الأمامية
-          const transformedCandidates = (candidates || []).map(candidate => ({
-            id: candidate.id,
-            name: candidate.name,
-            nationalId: candidate.national_id,
-            birthDate: candidate.birth_date,
-            governorate: candidate.governorate,
-            qualification: candidate.qualification,
-            maritalStatus: candidate.marital_status,
-            securityCompany: candidate.security_company,
-            position: candidate.position,
-            offerDate: candidate.offer_date,
-            offerResult: candidate.offer_result,
-            status: candidate.status,
-            createdBy: candidate.created_by,
-            notes: candidate.notes,
-            workShift: candidate.work_shift as 'نهار' | 'ليل' | undefined,
-            isRejectedBefore: candidate.is_rejected_before,
-            previousRejectionDate: candidate.previous_rejection_date,
-            createdAt: candidate.created_at,
-            updatedAt: candidate.updated_at
-          }))
+          const transformedCandidates = (candidates || []).map(transformCandidate)
 
-          const transformedInterviews = (interviews || []).map(interview => ({
-            id: interview.id,
-            candidateId: interview.candidate_id,
-            candidateName: interview.candidate_name,
-            position: interview.position,
-            date: interview.date,
-            time: interview.time,
-            status: interview.status,
-            notes: interview.notes,
-            interviewer: interview.interviewer,
-            createdAt: interview.created_at,
-            updatedAt: interview.updated_at
-          }))
+          const transformedInterviews = (interviews || []).map(transformInterview)
 
-          const transformedSavedCandidates = (savedCandidates || []).map(saved => ({
-            id: saved.id,
-            name: saved.name,
-            nationalId: saved.national_id,
-            birthDate: saved.birth_date,
-            governorate: saved.governorate,
-            qualification: saved.qualification,
-            maritalStatus: saved.marital_status,
-            securityCompany: saved.security_company,
-            position: saved.position,
-            offerDate: saved.offer_date,
-            finalResult: saved.final_result,
-            decisionDate: saved.decision_date,
-            decisionBy: saved.decision_by,
-            notes: saved.notes,
-            workShift: saved.work_shift,
-            exclusionReason: saved.exclusion_reason,
-            resignationReason: saved.resignation_reason,
-            isRejectedBefore: saved.is_rejected_before,
-            previousRejectionDate: saved.previous_rejection_date,
-            createdAt: saved.created_at
-          }))
+          const transformedSavedCandidates = (savedCandidates || []).map(transformSavedCandidate)
 
           // تحويل الإشعارات من snake_case إلى camelCase
-          const transformedNotifications: Notification[] = (notifications || []).map(n => ({
-            id: n.id,
-            type: n.type,
-            title: n.title,
-            message: n.message,
-            candidateId: n.candidate_id,
-            candidateName: n.candidate_name,
-            isRead: n.is_read,
-            createdAt: n.created_at
-          }))
+          const transformedNotifications: Notification[] = (notifications || []).map(transformNotification)
 
           set({
             candidates: transformedCandidates,
@@ -1358,7 +1153,7 @@ export const useStore = create<AppState>()(
             name: 'مدير الأمن - مسئول مقابلات',
             email: 'interview@company.com',
             userType: 'interview_manager',
-            department: 'إدارة أمن اعمار مراسي',
+            department: 'إدارة الأمن الداخلي',
             createdAt: new Date().toISOString()
           },
           {
@@ -1366,7 +1161,7 @@ export const useStore = create<AppState>()(
             name: 'أدمن شركة الأمن - موظف',
             email: 'security@company.com',
             userType: 'security_employee',
-            department: 'إدارة أمن اعمار مراسي',
+            department: 'إدارة الأمن الداخلي',
             createdAt: new Date().toISOString()
           },
           {
@@ -1374,7 +1169,7 @@ export const useStore = create<AppState>()(
             name: 'أحمد حسين - الأدمن',
             email: 'admin@company.com',
             userType: 'admin',
-            department: 'إدارة أمن اعمار مراسي',
+            department: 'إدارة الأمن الداخلي',
             createdAt: new Date().toISOString()
           }
         ]
@@ -1743,27 +1538,7 @@ export const useStore = create<AppState>()(
           
           // تحديث الحالة المحلية
           if (insertedData) {
-            const transformedCandidates: Candidate[] = insertedData.map(data => ({
-              id: data.id,
-              name: data.name,
-              nationalId: data.national_id,
-              birthDate: data.birth_date,
-              governorate: data.governorate,
-              qualification: data.qualification,
-              maritalStatus: data.marital_status as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
-              securityCompany: data.security_company,
-              position: data.position || undefined,
-              offerDate: data.offer_date,
-              offerResult: data.offer_result as 'مقبول' | 'مرفوض' | 'مستبعد' | 'في انتظار',
-              status: data.status as 'جديد' | 'قيد المراجعة' | 'تم التوظيف' | 'مرفوض',
-              createdBy: data.created_by,
-              notes: data.notes || undefined,
-              workShift: data.work_shift as 'نهار' | 'ليل' | undefined,
-              createdAt: data.created_at,
-              updatedAt: data.updated_at,
-              isRejectedBefore: data.is_rejected_before,
-              previousRejectionDate: data.previous_rejection_date || undefined
-            }))
+            const transformedCandidates: Candidate[] = insertedData.map(transformCandidate)
 
             set(state => ({
               candidates: [...state.candidates, ...transformedCandidates]
@@ -1902,28 +1677,7 @@ export const useStore = create<AppState>()(
               }
 
               // تحديث الحالة المحلية
-              const transformedData: SavedCandidate = {
-                id: data.id,
-                name: data.name,
-                nationalId: data.national_id,
-                birthDate: data.birth_date,
-                governorate: data.governorate,
-                qualification: data.qualification,
-                maritalStatus: data.marital_status,
-                securityCompany: data.security_company,
-                position: data.position,
-                offerDate: data.offer_date,
-                finalResult: data.final_result,
-                decisionDate: data.decision_date,
-                decisionBy: data.decision_by,
-                notes: data.notes,
-                workShift: data.work_shift,
-                exclusionReason: data.exclusion_reason,
-                resignationReason: data.resignation_reason,
-                isRejectedBefore: data.is_rejected_before,
-                previousRejectionDate: data.previous_rejection_date,
-                createdAt: data.created_at
-              }
+              const transformedData: SavedCandidate = transformSavedCandidate(data)
               
               set(state => ({
                 savedCandidates: [...state.savedCandidates, transformedData]
@@ -1942,28 +1696,7 @@ export const useStore = create<AppState>()(
           
           // تحديث الحالة المحلية
           if (insertedData) {
-            const transformedCandidates: SavedCandidate[] = insertedData.map(data => ({
-              id: data.id,
-              name: data.name,
-              nationalId: data.national_id,
-              birthDate: data.birth_date,
-              governorate: data.governorate,
-              qualification: data.qualification,
-              maritalStatus: data.marital_status as 'أعزب' | 'متزوج' | 'مطلق' | 'أرمل',
-              securityCompany: data.security_company,
-              position: data.position || undefined,
-              offerDate: data.offer_date,
-              finalResult: data.final_result as 'مقبول' | 'مرفوض' | 'مستبعد',
-              decisionDate: data.decision_date,
-              decisionBy: data.decision_by,
-              notes: data.notes || undefined,
-              workShift: data.work_shift as 'نهار' | 'ليل' | undefined,
-              exclusionReason: data.exclusion_reason || undefined,
-              resignationReason: data.resignation_reason || undefined,
-              isRejectedBefore: data.is_rejected_before,
-              previousRejectionDate: data.previous_rejection_date || undefined,
-              createdAt: data.created_at
-            }))
+            const transformedCandidates: SavedCandidate[] = insertedData.map(transformSavedCandidate)
 
             set(state => ({
               savedCandidates: [...state.savedCandidates, ...transformedCandidates]
@@ -2072,17 +1805,7 @@ export const useStore = create<AppState>()(
               // تحديث مباشر للحالة المحلية
               if (payload.eventType === 'INSERT' && payload.new) {
                 const newLog = payload.new as any
-                const transformed: LoginLog = {
-                  id: newLog.id, userId: newLog.user_id,
-                  userEmail: newLog.user_email, userName: newLog.user_name,
-                  loginTime: newLog.login_time, logoutTime: newLog.logout_time,
-                  ipAddress: newLog.ip_address, userAgent: newLog.user_agent,
-                  deviceType: newLog.device_type, browser: newLog.browser,
-                  os: newLog.os, country: newLog.country, city: newLog.city,
-                  latitude: newLog.latitude, longitude: newLog.longitude,
-                  isActive: newLog.is_active, sessionId: newLog.session_id,
-                  createdAt: newLog.created_at,
-                }
+                const transformed: LoginLog = transformLoginLog(newLog)
                 set(state => ({ loginLogs: [transformed, ...state.loginLogs] }))
               } else if (payload.eventType === 'UPDATE' && payload.new) {
                 const updated = payload.new as any
@@ -2243,26 +1966,7 @@ export const useStore = create<AppState>()(
 
           // تحديث الحالة المحلية
           if (data) {
-            const transformedLog: LoginLog = {
-              id: data.id,
-              userId: data.user_id,
-              userEmail: data.user_email,
-              userName: data.user_name,
-              loginTime: data.login_time,
-              logoutTime: data.logout_time,
-              ipAddress: data.ip_address,
-              userAgent: data.user_agent,
-              deviceType: data.device_type,
-              browser: data.browser,
-              os: data.os,
-              country: data.country,
-              city: data.city,
-              latitude: data.latitude,
-              longitude: data.longitude,
-              isActive: data.is_active,
-              sessionId: data.session_id,
-              createdAt: data.created_at
-            }
+            const transformedLog: LoginLog = transformLoginLog(data)
             set(state => ({
               loginLogs: [transformedLog, ...state.loginLogs]
             }))
@@ -2321,26 +2025,7 @@ export const useStore = create<AppState>()(
             return
           }
 
-          const transformedLogs: LoginLog[] = (data || []).map(log => ({
-            id: log.id,
-            userId: log.user_id,
-            userEmail: log.user_email,
-            userName: log.user_name,
-            loginTime: log.login_time,
-            logoutTime: log.logout_time,
-            ipAddress: log.ip_address,
-            userAgent: log.user_agent,
-            deviceType: log.device_type,
-            browser: log.browser,
-            os: log.os,
-            country: log.country,
-            city: log.city,
-            latitude: log.latitude,
-            longitude: log.longitude,
-            isActive: log.is_active,
-            sessionId: log.session_id,
-            createdAt: log.created_at
-          }))
+          const transformedLogs: LoginLog[] = (data || []).map(transformLoginLog)
 
           set({ loginLogs: transformedLogs })
         } catch (error) {

@@ -50,6 +50,9 @@ export interface Database {
           updated_at: string
           is_rejected_before: boolean
           previous_rejection_date: string | null
+          photo_base64: string | null
+          cv_base64: string | null
+          cv_file_name: string | null
         }
         Insert: {
           id?: string
@@ -70,6 +73,9 @@ export interface Database {
           updated_at?: string
           is_rejected_before?: boolean
           previous_rejection_date?: string | null
+          photo_base64?: string | null
+          cv_base64?: string | null
+          cv_file_name?: string | null
         }
         Update: {
           id?: string
@@ -90,6 +96,9 @@ export interface Database {
           updated_at?: string
           is_rejected_before?: boolean
           previous_rejection_date?: string | null
+          photo_base64?: string | null
+          cv_base64?: string | null
+          cv_file_name?: string | null
         }
       }
       interviews: {

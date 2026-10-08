@@ -6,33 +6,40 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 220 25% 14%;
+    --background: 250 15% 97%;
+    --foreground: 260 25% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 14%;
+    --card-foreground: 260 25% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 14%;
-    --primary: 217 91% 48%;
+    --popover-foreground: 260 25% 12%;
+    --primary: 262 72% 50%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 215 25% 94%;
-    --secondary-foreground: 220 25% 14%;
-    --muted: 215 20% 92%;
-    --muted-foreground: 215 16% 52%;
-    --accent: 215 25% 94%;
-    --accent-foreground: 220 25% 14%;
+    --secondary: 260 20% 94%;
+    --secondary-foreground: 260 25% 12%;
+    --muted: 260 15% 92%;
+    --muted-foreground: 260 12% 50%;
+    --accent: 260 20% 94%;
+    --accent-foreground: 260 25% 12%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 217 91% 48%;
+    --border: 260 15% 88%;
+    --input: 260 15% 88%;
+    --ring: 262 72% 50%;
     --radius: 0.625rem;
 
-    /* Custom design tokens */
-    --sidebar-bg: 222 47% 13%;
-    --sidebar-hover: 222 47% 18%;
-    --sidebar-active: 217 91% 48%;
-    --sidebar-text: 215 25% 72%;
+    /* Marassi Design Tokens */
+    --sidebar-bg: 258 42% 12%;
+    --sidebar-hover: 258 42% 18%;
+    --sidebar-active: 262 72% 50%;
+    --sidebar-text: 258 20% 68%;
     --sidebar-text-active: 0 0% 100%;
+
+    /* Marassi Brand Colors */
+    --Marassi-purple: 262 72% 50%;
+    --Marassi-purple-light: 262 72% 96%;
+    --Marassi-purple-dark: 262 72% 35%;
+    --Marassi-silver: 220 15% 75%;
+    --Marassi-silver-light: 220 15% 95%;
 
     --success: 152 69% 38%;
     --success-light: 152 55% 94%;
@@ -40,43 +47,43 @@
     --warning-light: 38 100% 94%;
     --danger: 4 86% 58%;
     --danger-light: 4 86% 95%;
-    --info: 217 91% 48%;
-    --info-light: 217 91% 95%;
-    --purple: 262 83% 58%;
-    --purple-light: 262 83% 95%;
+    --info: 262 72% 50%;
+    --info-light: 262 72% 95%;
+    --purple: 262 72% 50%;
+    --purple-light: 262 72% 95%;
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 96%;
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 217 91% 58%;
-    --primary-foreground: 222 47% 8%;
-    --secondary: 222 35% 18%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 222 35% 16%;
-    --muted-foreground: 215 20% 58%;
-    --accent: 222 35% 18%;
-    --accent-foreground: 210 40% 96%;
+    --background: 258 42% 7%;
+    --foreground: 260 30% 95%;
+    --card: 258 42% 10%;
+    --card-foreground: 260 30% 95%;
+    --popover: 258 42% 10%;
+    --popover-foreground: 260 30% 95%;
+    --primary: 262 65% 60%;
+    --primary-foreground: 258 42% 7%;
+    --secondary: 258 35% 17%;
+    --secondary-foreground: 260 30% 95%;
+    --muted: 258 35% 15%;
+    --muted-foreground: 260 15% 58%;
+    --accent: 258 35% 17%;
+    --accent-foreground: 260 30% 95%;
     --destructive: 4 72% 50%;
-    --destructive-foreground: 210 40% 96%;
-    --border: 222 35% 20%;
-    --input: 222 35% 16%;
-    --ring: 217 91% 58%;
+    --destructive-foreground: 260 30% 95%;
+    --border: 258 35% 20%;
+    --input: 258 35% 15%;
+    --ring: 262 65% 60%;
 
     --success: 152 60% 45%;
-    --success-light: 152 40% 15%;
+    --success-light: 152 40% 14%;
     --warning: 38 85% 55%;
-    --warning-light: 38 60% 15%;
+    --warning-light: 38 60% 14%;
     --danger: 4 80% 60%;
-    --danger-light: 4 60% 15%;
-    --info: 217 91% 58%;
-    --info-light: 217 60% 15%;
-    --purple: 262 75% 65%;
-    --purple-light: 262 50% 15%;
+    --danger-light: 4 60% 14%;
+    --info: 262 65% 60%;
+    --info-light: 262 50% 14%;
+    --purple: 262 65% 60%;
+    --purple-light: 262 50% 14%;
   }
 }
 
@@ -407,7 +414,12 @@
 /* ===== Login Page ===== */
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, hsl(222 47% 10%) 0%, hsl(217 60% 18%) 50%, hsl(222 47% 10%) 100%);
+  background-image: 
+    linear-gradient(135deg, rgba(15, 23, 42, 0.72) 0%, rgba(30, 41, 59, 0.76) 50%, rgba(15, 23, 42, 0.82) 100%),
+    url('/security-background.jfif');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -419,25 +431,27 @@
   content: '';
   position: absolute;
   width: 600px; height: 600px;
-  background: radial-gradient(circle, hsl(217 91% 48% / 0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, hsl(262 72% 50% / 0.25) 0%, transparent 70%);
   top: -200px; right: -200px;
   pointer-events: none;
 }
 .login-page::after {
   content: '';
   position: absolute;
-  width: 400px; height: 400px;
-  background: radial-gradient(circle, hsl(262 83% 58% / 0.1) 0%, transparent 70%);
+  width: 450px; height: 450px;
+  background: radial-gradient(circle, hsl(217 91% 48% / 0.2) 0%, transparent 70%);
   bottom: -100px; left: -100px;
   pointer-events: none;
 }
 .login-card {
-  background: hsl(var(--card));
-  border-radius: 20px;
+  background: hsl(var(--card) / 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-radius: 24px;
   padding: 44px 40px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.25);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px hsl(var(--border) / 0.8);
   position: relative;
   z-index: 1;
   border: 1px solid hsl(var(--border));
@@ -1548,3 +1562,23 @@
   .stat-card .stat-value { font-size: 20px !important; color: black !important; }
   .stat-card .stat-label { font-size: 11px !important; color: #444 !important; }
 }
+
+/* ===== Smooth Animations ===== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.fade-in { animation: fadeIn 0.25s ease-out; }
+.scale-in { animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+.slide-in-right { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1); }

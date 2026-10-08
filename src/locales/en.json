@@ -1,17 +1,17 @@
 {
   "translation": {
     "footer": {
-      "rights": "All rights reserved. General / Magaued Youssef - Made with love by Twins Web Development",
-      "support": "WhatsApp Technical Support +201552119251 | Email: AhmedHusseinElsayed@outlook.com"
+      "rights": "All rights reserved. General / Magaued Youssef. - Made with love by Twins Web Development",
+      "support": "WhatsApp Technical Support +201552962516 | Email: AhmedHusseinElsayed@outlook.com"
     },
     "general": {
       "print": "Print / PDF",
       "settings": "Settings"
     },
-
     "nav": {
       "dashboard": "Dashboard",
       "candidates": "Candidates",
+      "interviews": "Interviews & Schedule",
       "analytics": "Reports",
       "database": "Database",
       "bulkUpload": "Upload Excel",
@@ -19,7 +19,7 @@
       "usersDesc": "Manage team members and roles",
       "settings": "Settings",
       "security": "Security Logs",
-      "systemName": "Marasy System",
+      "systemName": "Marassi",
       "systemDesc": "Interview Management"
     },
     "candidates": {

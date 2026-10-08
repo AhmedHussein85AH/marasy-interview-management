@@ -1,27 +1,49 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>نظام إدارة المقابلات مراسي</title>
-    <meta name="description" content="نظام شامل لإدارة المقابلات والمرشحين مع نظام الصلاحيات والإشعارات المتقدمة" />
-    <meta name="author" content="Ahmed Hussein - Security Coordinator" />
-    <meta name="copyright" content="© 2024 Ahmed Hussein - Security Coordinator. All rights reserved." />
-    <meta name="keywords" content="إدارة المقابلات, مرشحين, موارد بشرية, نظام صلاحيات, شركات الأمن" />
 
-    <meta property="og:title" content="نظام إدارة المقابلات مراسي" />
-    <meta property="og:description" content="نظام شامل لإدارة المقابلات والمرشحين مع نظام الصلاحيات والإشعارات المتقدمة" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/og-image.png" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marassi — نظام إدارة المقابلات</title>
+  <meta name="description" content="Marassi — منصة ذكية لإدارة مقابلات التوظيف والمرشحين بكل احترافية وسهولة" />
+  <meta name="author" content="Ahmed Hussein - Security Coordinator | Twins Web Development" />
+  <meta name="copyright" content="© 2025 Marassi. All rights reserved. General / Magaued Youssef." />
+  <meta name="keywords" content="Marassi, إدارة المقابلات, مرشحين, موارد بشرية, نظام صلاحيات, شركات الأمن" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="نظام إدارة المقابلات مراسي" />
-    <meta name="twitter:description" content="نظام شامل لإدارة المقابلات والمرشحين" />
-    <meta name="twitter:image" content="/og-image.png" />
-  </head>
+  <meta property="og:title" content="Marassi — نظام إدارة المقابلات" />
+  <meta property="og:description" content="منصة ذكية لإدارة مقابلات التوظيف والمرشحين بكل احترافية وسهولة" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/og-image.png" />
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Marassi — نظام إدارة المقابلات" />
+  <meta name="twitter:description" content="منصة ذكية لإدارة مقابلات التوظيف والمرشحين" />
+  <meta name="twitter:image" content="/og-image.png" />
+
+  <!-- Marassi Theme Color, Favicon & PWA Manifest -->
+  <meta name="theme-color" content="#6d28d9" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Marassi" />
+  <link rel="icon" type="image/svg+xml" href="/Marassi-logo.svg" />
+  <link rel="alternate icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/Marassi-logo.svg" />
+  <link rel="manifest" href="/manifest.json" />
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('[Marassi PWA] Service Worker registered successfully:', reg.scope))
+          .catch(err => console.error('[Marassi PWA] Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+
 </html>

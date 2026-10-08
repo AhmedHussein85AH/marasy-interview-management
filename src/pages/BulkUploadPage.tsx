@@ -2,10 +2,11 @@ import React, { useState, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import ProtectedLayout from '../components/ProtectedLayout'
 import { usePermissions } from '../hooks/usePermissions'
+import { useEditableLists } from '../hooks/useEditableLists'
 import * as XLSX from 'xlsx'
-import { GOVERNORATES, SECURITY_COMPANIES, POSITIONS } from '../constants/lists'
-import { Download, FileJson, FileSpreadsheet, AlertTriangle } from 'lucide-react'
+import { Download, FileJson, FileSpreadsheet, AlertTriangle, ImagePlus, CheckCircle2, XCircle, GalleryHorizontalEnd } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { extractNationalIdFromFileName, compressCandidatePhoto } from '../utils/imageCompressor'
 
 interface ExcelCandidate {
   الاسم: string
@@ -24,10 +25,11 @@ interface ExcelCandidate {
 }
 
 const BulkUploadPage: React.FC = () => {
-  const { currentUser, bulkAddCandidates, bulkAddSavedCandidates, candidates, savedCandidates } = useStore()
+  const { currentUser, bulkAddCandidates, bulkAddSavedCandidates, candidates, savedCandidates, updateCandidate } = useStore()
+  const { allGovernorates, allCompanies, allPositions } = useEditableLists()
   const perms = usePermissions()
   const canUpload = perms.canBulkUpload
-  const [activeTab, setActiveTab] = useState<'import' | 'export'>('import')
+  const [activeTab, setActiveTab] = useState<'import' | 'export' | 'photos'>('import')
   const [uploadType, setUploadType] = useState<'candidates' | 'saved'>('candidates')
   const [file, setFile] = useState<File | null>(null)
   const [previewData, setPreviewData] = useState<ExcelCandidate[]>([])
@@ -38,6 +40,11 @@ const BulkUploadPage: React.FC = () => {
   const [showAllErrors, setShowAllErrors] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const jsonRef = useRef<HTMLInputElement>(null)
+  const photosInputRef = useRef<HTMLInputElement>(null)
+  // Bulk photos state
+  const [photoUploadResults, setPhotoUploadResults] = useState<{ matched: string[]; unmatched: string[]; errors: string[] } | null>(null)
+  const [isBulkPhotoUploading, setIsBulkPhotoUploading] = useState(false)
+  const [bulkPhotoProgress, setBulkPhotoProgress] = useState({ current: 0, total: 0 })
   const { t } = useTranslation()
 
   const today = new Date().toISOString().split('T')[0]
@@ -142,16 +149,16 @@ const BulkUploadPage: React.FC = () => {
 
   const validateGovernorate = (g: string) => {
     const t = g?.toString().trim() || ''
-    return GOVERNORATES.find(x => x === t || x.toLowerCase() === t.toLowerCase()) || t
+    return allGovernorates.find(x => x === t || x.toLowerCase() === t.toLowerCase()) || t
   }
   const validateSecurityCompany = (c: string) => {
     const t = c?.toString().trim() || ''
-    return SECURITY_COMPANIES.find(x => x === t || x.toLowerCase() === t.toLowerCase()) || t
+    return allCompanies.find(x => x === t || x.toLowerCase() === t.toLowerCase()) || t
   }
   const validatePosition = (p: string): string | undefined => {
     const t = p?.toString().trim() || ''
     if (!t) return undefined
-    return POSITIONS.find(x => x === t || x.toLowerCase() === t.toLowerCase()) || t
+    return allPositions.find(x => x === t || x.toLowerCase() === t.toLowerCase()) || t
   }
 
   const convertToCandidates = (data: ExcelCandidate[]) => data.map(item => ({
@@ -236,12 +243,12 @@ const BulkUploadPage: React.FC = () => {
       if (!bdV.valid) errors.push(`السطر ${row}: ${bdV.error}`)
       const gov = item['المحافظة']?.toString().trim() || ''
       if (!gov) errors.push(`السطر ${row}: المحافظة مطلوبة`)
-      else if (!GOVERNORATES.some(g => g === gov || g.toLowerCase() === gov.toLowerCase()))
+      else if (!allGovernorates.some(g => g === gov || g.toLowerCase() === gov.toLowerCase()))
         warnings.push(`السطر ${row}: المحافظة "${gov}" غير موجودة في القائمة`)
       if (!item['المؤهل']?.toString().trim()) errors.push(`السطر ${row}: المؤهل مطلوب`)
       const comp = item['اسم_الشركة']?.toString().trim() || ''
       if (!comp) errors.push(`السطر ${row}: اسم الشركة مطلوب`)
-      else if (!SECURITY_COMPANIES.some(c => c === comp || c.toLowerCase() === comp.toLowerCase()))
+      else if (!allCompanies.some(c => c === comp || c.toLowerCase() === comp.toLowerCase()))
         warnings.push(`السطر ${row}: شركة "${comp}" غير موجودة في القائمة`)
       if (!['أعزب','متزوج','مطلق','أرمل'].includes(item['الحالة_الاجتماعية']?.toString().trim()))
         errors.push(`السطر ${row}: الحالة الاجتماعية يجب أن تكون: أعزب، متزوج، مطلق، أو أرمل`)
@@ -308,6 +315,46 @@ const BulkUploadPage: React.FC = () => {
     XLSX.writeFile(wb, `قالب_رفع_المرشحين_${today}.xlsx`)
   }
 
+  // ── Bulk Photo Upload ─────────────────────────────────────
+  const handleBulkPhotoUpload = async (files: FileList) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+    if (imageFiles.length === 0) { alert('لم يتم العثور على أي صورة في الملفات المحددة'); return }
+    setIsBulkPhotoUploading(true)
+    setBulkPhotoProgress({ current: 0, total: imageFiles.length })
+    setPhotoUploadResults(null)
+    const matched: string[] = []
+    const unmatched: string[] = []
+    const errors: string[] = []
+
+    const candidateMap = new Map<string, string>() // nationalId -> candidateId
+    candidates.forEach(c => candidateMap.set(c.nationalId, c.id))
+
+    for (let i = 0; i < imageFiles.length; i++) {
+      const imgFile = imageFiles[i]
+      setBulkPhotoProgress({ current: i + 1, total: imageFiles.length })
+      const nationalId = extractNationalIdFromFileName(imgFile.name)
+      if (!nationalId) {
+        unmatched.push(`لم يتم استخراج رقم قومي من: "${imgFile.name}"`)
+        continue
+      }
+      const candidateId = candidateMap.get(nationalId)
+      if (!candidateId) {
+        unmatched.push(`لم يتم العثور على مرشح بالرقم القومي: ${nationalId} (من: "${imgFile.name}")`)
+        continue
+      }
+      try {
+        const compressed = await compressCandidatePhoto(imgFile)
+        await updateCandidate(candidateId, { photoBase64: compressed.base64 } as any)
+        matched.push(`✅ ${imgFile.name} → رقم قومي: ${nationalId} (${compressed.sizeKb}KB)`)
+      } catch (err: any) {
+        errors.push(`خطأ في معالجة: "${imgFile.name}" - ${err.message}`)
+      }
+    }
+
+    setPhotoUploadResults({ matched, unmatched, errors })
+    setIsBulkPhotoUploading(false)
+  }
+
   const resetForm = () => {
     setFile(null); setPreviewData([]); setShowPreview(false)
     setUploadResult(null); setShowAllErrors(false)
@@ -332,7 +379,7 @@ const BulkUploadPage: React.FC = () => {
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: '#f1f5f9', borderRadius: '10px', padding: '4px' }}>
-            {(['import', 'export'] as const).map(tab => (
+            {(['import', 'photos', 'export'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
                 flex: 1, padding: '10px', border: 'none', borderRadius: '8px', cursor: 'pointer',
                 fontFamily: 'inherit', fontSize: '14px', fontWeight: 600,
@@ -340,10 +387,97 @@ const BulkUploadPage: React.FC = () => {
                 color: activeTab === tab ? '#1e293b' : '#64748b',
                 boxShadow: activeTab === tab ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
               }}>
-                {tab === 'import' ? `📥 ${t('upload.import')}` : `📤 ${t('upload.export')}`}
+                {tab === 'import' ? `📥 ${t('upload.import')}` : tab === 'photos' ? '🖼️ رفع صور جماعي' : `📤 ${t('upload.export')}`}
               </button>
             ))}
           </div>
+
+          {/* ══ PHOTOS TAB ══ */}
+          {activeTab === 'photos' && (
+            <div>
+              <div style={{ background: 'linear-gradient(135deg, #eff6ff, #f5f3ff)', borderRadius: '12px', padding: '20px', marginBottom: '20px', border: '1px solid #bfdbfe' }}>
+                <h3 style={{ margin: '0 0 8px', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <GalleryHorizontalEnd size={18} /> رفع صور جماعي بالرقم القومي
+                </h3>
+                <p style={{ margin: 0, color: '#3730a3', fontSize: '13px', lineHeight: 1.6 }}>
+                  سمِّ الصورة باسم الرقم القومي (14 رقم) جزءاً منه وسيتم ربطها تلقائياً بالمرشح.
+                  <br/><strong>مثال:</strong> <code style={{ background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>29805121200351.jpg</code> أو <code style={{ background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>photo_29805121200351.png</code>
+                  <br/>تُضغط الصور تلقائياً إلى ~30KB لتوفير الباقة المجانية.
+                </p>
+              </div>
+
+              {/* Drop Zone */}
+              <div
+                style={{ border: '2px dashed #6366f1', borderRadius: '12px', padding: '40px 20px', textAlign: 'center', cursor: 'pointer', background: '#fafaff', marginBottom: '20px', transition: 'all 0.2s' }}
+                onClick={() => photosInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.background = '#ede9fe' }}
+                onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.background = '#fafaff' }}
+                onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.background = '#fafaff'; if (e.dataTransfer.files.length) handleBulkPhotoUpload(e.dataTransfer.files) }}
+              >
+                <ImagePlus size={36} color="#6366f1" style={{ marginBottom: 10 }} />
+                <p style={{ margin: '0 0 6px', fontWeight: 700, color: '#3730a3', fontSize: '15px' }}>اسحب وأفلت الصور هنا</p>
+                <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}>أو اضغط لإختيار ملفات متعددة (JPG, PNG, WEBP ...)</p>
+                <input ref={photosInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files?.length) handleBulkPhotoUpload(e.target.files) }} />
+              </div>
+
+              {/* Progress */}
+              {isBulkPhotoUploading && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, color: '#374151' }}>جاري معالجة الصور...</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{bulkPhotoProgress.current} / {bulkPhotoProgress.total}</span>
+                  </div>
+                  <div style={{ height: 10, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: 'linear-gradient(90deg,#6366f1,#8b5cf6)', borderRadius: 99, transition: 'width 0.3s', width: `${bulkPhotoProgress.total ? (bulkPhotoProgress.current / bulkPhotoProgress.total) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Results */}
+              {photoUploadResults && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {photoUploadResults.matched.length > 0 && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                        <CheckCircle2 size={16} color="#16a34a" />
+                        <strong style={{ color: '#15803d', fontSize: '14px' }}>تم ربط {photoUploadResults.matched.length} صورة بنجاح</strong>
+                      </div>
+                      <ul style={{ margin: 0, padding: '0 16px', maxHeight: 150, overflowY: 'auto' }}>
+                        {photoUploadResults.matched.map((m, i) => <li key={i} style={{ fontSize: '12px', color: '#166534', marginBottom: 3 }}>{m}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {photoUploadResults.unmatched.length > 0 && (
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                        <AlertTriangle size={16} color="#d97706" />
+                        <strong style={{ color: '#92400e', fontSize: '14px' }}>{photoUploadResults.unmatched.length} صورة لم يتم مطابقتها</strong>
+                      </div>
+                      <ul style={{ margin: 0, padding: '0 16px', maxHeight: 120, overflowY: 'auto' }}>
+                        {photoUploadResults.unmatched.map((m, i) => <li key={i} style={{ fontSize: '12px', color: '#78350f', marginBottom: 3 }}>{m}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {photoUploadResults.errors.length > 0 && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                        <XCircle size={16} color="#dc2626" />
+                        <strong style={{ color: '#991b1b', fontSize: '14px' }}>{photoUploadResults.errors.length} خطأ</strong>
+                      </div>
+                      <ul style={{ margin: 0, padding: '0 16px', maxHeight: 100, overflowY: 'auto' }}>
+                        {photoUploadResults.errors.map((m, i) => <li key={i} style={{ fontSize: '12px', color: '#7f1d1d', marginBottom: 3 }}>{m}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  <button onClick={() => { setPhotoUploadResults(null); if (photosInputRef.current) photosInputRef.current.value = '' }}
+                    style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 20px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, alignSelf: 'flex-start' }}>
+                    رفع صور جديدة
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ══ EXPORT TAB ══ */}
           {activeTab === 'export' && (
@@ -434,9 +568,9 @@ const BulkUploadPage: React.FC = () => {
                 <details style={{ marginTop: '10px' }}>
                   <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#2980b9' }}>{t('upload.viewLists')}</summary>
                   <div style={{ marginTop: '10px', padding: '10px', backgroundColor: 'white', borderRadius: '5px' }}>
-                    <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>المحافظات:</strong> {GOVERNORATES.join('، ')}</p>
-                    <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>شركات الأمن:</strong> {SECURITY_COMPANIES.join('، ')}</p>
-                    <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>الوظائف:</strong> {POSITIONS.join('، ')}</p>
+                    <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>المحافظات:</strong> {allGovernorates.join('، ')}</p>
+                    <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>شركات الأمن:</strong> {allCompanies.join('، ')}</p>
+                    <p style={{ margin: '5px 0', fontSize: '13px' }}><strong>الوظائف:</strong> {allPositions.join('، ')}</p>
                   </div>
                 </details>
               </div>
