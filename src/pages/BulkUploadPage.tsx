@@ -402,7 +402,7 @@ const BulkUploadPage: React.FC = () => {
                 <p style={{ margin: 0, color: '#3730a3', fontSize: '13px', lineHeight: 1.6 }}>
                   سمِّ الصورة باسم الرقم القومي (14 رقم) جزءاً منه وسيتم ربطها تلقائياً بالمرشح.
                   <br/><strong>مثال:</strong> <code style={{ background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>29805121200351.jpg</code> أو <code style={{ background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>photo_29805121200351.png</code>
-                  <br/>تُضغط الصور تلقائياً إلى ~30KB لتوفير الباقة المجانية.
+                  <br/>تُضغط الصور تلقائياً إلى ~30KB لتوفير  .
                 </p>
               </div>
 
